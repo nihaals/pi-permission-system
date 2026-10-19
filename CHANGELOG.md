@@ -8,7 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- Added `escapeAction` extension config setting (also toggleable in the `/permission-system` settings modal) controlling what `esc` does at a permission prompt: `reject` (default, deny immediately with no reason) or `reject_with_reason` (prompt for an optional denial reason before rejecting).
+- Added `escapeAction` extension setting controlling what `esc` does at a permission prompt: `reject` (default, deny immediately with no reason) or `reject_with_reason` (prompt for an optional denial reason before rejecting).
+
+### Changed
+- **Breaking:** extension settings (`enabled`, `debug`, `yoloMode`, `forwardedPromptTimeoutSeconds`, `escapeAction`) now live as top-level keys of the global policy file (`pi-permissions.jsonc`) instead of a separate `config.json`. All keys are documented in the JSON schema; delete your old `config.json` after moving any non-default values.
+- Removed `PI_PERMISSION_SYSTEM_CONFIG_PATH`; settings always load from the policy file resolved via `PI_PERMISSION_SYSTEM_POLICY_AGENT_DIR` / `PI_CODING_AGENT_DIR`.
+- A missing policy file no longer triggers automatic file creation; defaults are used in memory instead.
+- `/permission-system` and the runtime YOLO toggle now save settings with JSONC tree edits, preserving comments, formatting, and all non-settings keys; saving is refused when the policy file is unparseable.
 
 ## [0.8.0] - 2026-07-03
 

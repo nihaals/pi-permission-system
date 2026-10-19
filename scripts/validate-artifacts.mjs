@@ -44,8 +44,8 @@ function validatePolicyExample(config) {
   }
 }
 
-const extensionConfig = readJson("config.json");
-assert(extensionConfig && typeof extensionConfig === "object" && !Array.isArray(extensionConfig), "config.json must be an object");
+const policyExample = readJson("config/config.example.json");
+assert(policyExample && typeof policyExample === "object" && !Array.isArray(policyExample), "config/config.example.json must be an object");
 
 const schema = readJson("schemas/permissions.schema.json");
 const specialProperties = schema?.properties?.special?.properties;
@@ -53,7 +53,16 @@ assert(specialProperties && typeof specialProperties === "object", "schema speci
 assert(!Object.prototype.hasOwnProperty.call(specialProperties, "tool_call_limit"), "schema must not expose unsupported special.tool_call_limit");
 assert(Object.prototype.hasOwnProperty.call(specialProperties, "external_directory"), "schema must expose special.external_directory");
 
-validatePolicyExample(readJson("config/config.example.json"));
+// Extension settings live as top-level keys of the policy file.
+for (const key of ["enabled", "debug", "yoloMode", "forwardedPromptTimeoutSeconds", "escapeAction"]) {
+  assert(Object.prototype.hasOwnProperty.call(schema?.properties ?? {}, key), `schema must expose top-level '${key}'`);
+}
+assert(
+  JSON.stringify(schema.properties.escapeAction.enum) === JSON.stringify(["reject", "reject_with_reason"]),
+  "schema escapeAction must accept reject and reject_with_reason",
+);
+
+validatePolicyExample(policyExample);
 
 const packageJson = readJson("package.json");
 assert(packageJson.scripts?.typecheck?.includes("tsc"), "package.json must expose a TypeScript typecheck script");

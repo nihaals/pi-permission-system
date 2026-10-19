@@ -5,7 +5,6 @@ import { join } from "node:path";
 
 import piPermissionSystemExtension from "../src/index.js";
 import {
-  CONFIG_PATH_ENV_KEY,
   DEFAULT_EXTENSION_CONFIG,
   LOGS_DIR_ENV_KEY,
 } from "../src/extension-config.js";
@@ -53,7 +52,6 @@ function createToolCallHarness(): ToolCallHarness {
   const baseDir = mkdtempSync(join(tmpdir(), "pi-permission-system-issue-28-"));
   const cwd = join(baseDir, "repo");
   const policyDir = join(baseDir, "policy");
-  const extensionConfigPath = join(baseDir, "extension-config.json");
   const logsDir = join(baseDir, "logs");
   const prompts: string[] = [];
   const handlers: Record<string, MockHandler> = {};
@@ -62,7 +60,6 @@ function createToolCallHarness(): ToolCallHarness {
   for (const key of [
     "PI_CODING_AGENT_DIR",
     POLICY_AGENT_DIR_ENV_KEY,
-    CONFIG_PATH_ENV_KEY,
     LOGS_DIR_ENV_KEY,
     ...SUBAGENT_ENV_KEYS,
   ]) {
@@ -71,18 +68,18 @@ function createToolCallHarness(): ToolCallHarness {
 
   mkdirSync(cwd, { recursive: true });
   mkdirSync(join(policyDir, "agents"), { recursive: true });
+  // Extension settings now live in the same JSONC policy file as permissions.
   writeFileSync(
     join(policyDir, "pi-permissions.jsonc"),
     `${JSON.stringify({
       defaultPolicy: { tools: "ask", bash: "ask", mcp: "ask", skills: "ask", special: "ask" },
+      ...DEFAULT_EXTENSION_CONFIG,
     }, null, 2)}\n`,
     "utf8",
   );
-  writeFileSync(extensionConfigPath, `${JSON.stringify(DEFAULT_EXTENSION_CONFIG, null, 2)}\n`, "utf8");
 
   process.env.PI_CODING_AGENT_DIR = policyDir;
   process.env[POLICY_AGENT_DIR_ENV_KEY] = policyDir;
-  process.env[CONFIG_PATH_ENV_KEY] = extensionConfigPath;
   process.env[LOGS_DIR_ENV_KEY] = logsDir;
   for (const key of SUBAGENT_ENV_KEYS) {
     delete process.env[key];

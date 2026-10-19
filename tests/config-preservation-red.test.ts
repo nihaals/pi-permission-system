@@ -23,11 +23,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import {
-  CONFIG_PATH_ENV_KEY,
   DEFAULT_EXTENSION_CONFIG,
   LOGS_DIR_ENV_KEY,
+  POLICY_AGENT_DIR_ENV_KEY,
   type PermissionSystemExtensionConfig,
-  ensurePermissionSystemConfig,
   loadPermissionSystemConfig,
   normalizePermissionSystemConfig,
   savePermissionSystemConfig,
@@ -114,23 +113,23 @@ function createIsolatedConfigDir(initialContent?: string): {
   cleanup: () => void;
 } {
   const baseDir = mkdtempSync(join(tmpdir(), "pi-permission-system-issue31-"));
-  const configPath = join(baseDir, "config.json");
-  const originalConfigEnv = process.env[CONFIG_PATH_ENV_KEY];
+  const configPath = join(baseDir, "pi-permissions.jsonc");
+  const originalConfigEnv = process.env[POLICY_AGENT_DIR_ENV_KEY];
 
   if (initialContent !== undefined) {
     writeFileSync(configPath, initialContent, "utf8");
   }
 
-  process.env[CONFIG_PATH_ENV_KEY] = configPath;
+  process.env[POLICY_AGENT_DIR_ENV_KEY] = baseDir;
 
   return {
     configPath,
     baseDir,
     cleanup: (): void => {
       if (originalConfigEnv === undefined) {
-        delete process.env[CONFIG_PATH_ENV_KEY];
+        delete process.env[POLICY_AGENT_DIR_ENV_KEY];
       } else {
-        process.env[CONFIG_PATH_ENV_KEY] = originalConfigEnv;
+        process.env[POLICY_AGENT_DIR_ENV_KEY] = originalConfigEnv;
       }
       rmSync(baseDir, { recursive: true, force: true });
     },
@@ -172,7 +171,6 @@ type RuntimeHarness = {
   cleanup: () => Promise<void>;
 };
 
-const POLICY_AGENT_DIR_ENV_KEY = "PI_PERMISSION_SYSTEM_POLICY_AGENT_DIR";
 const SUBAGENT_ENV_KEYS = [
   "PI_AGENT_ROUTER_PARENT_SESSION_ID",
   "PI_AGENT_ROUTER_SUBAGENT_ID",
@@ -192,7 +190,6 @@ function createRuntimeHarness(
   const baseDir = mkdtempSync(join(tmpdir(), "pi-permission-system-issue31-runtime-"));
   const cwd = join(baseDir, "workspace");
   const policyDir = join(baseDir, "policy");
-  const extensionConfigPath = join(baseDir, "config.json");
   const logsDir = join(baseDir, "logs");
   const prompts: string[] = [];
   const handlers: Record<string, MockHandler> = {};
@@ -201,7 +198,6 @@ function createRuntimeHarness(
   for (const key of [
     "PI_CODING_AGENT_DIR",
     POLICY_AGENT_DIR_ENV_KEY,
-    CONFIG_PATH_ENV_KEY,
     LOGS_DIR_ENV_KEY,
     ...SUBAGENT_ENV_KEYS,
   ]) {
@@ -210,21 +206,14 @@ function createRuntimeHarness(
 
   mkdirSync(cwd, { recursive: true });
   mkdirSync(join(policyDir, "agents"), { recursive: true });
-  writeFileSync(
-    join(policyDir, "pi-permissions.jsonc"),
-    `${JSON.stringify({
-      defaultPolicy: { tools: "ask", bash: "ask", mcp: "ask", skills: "ask", special: "ask" },
-    }, null, 2)}\n`,
-    "utf8",
-  );
 
-  // Write the combined config (permissions + extension fields) to the extension
-  // config path. This simulates the user's situation from the issue.
+  // Extension settings and permission sections now share one JSONC policy file.
+  // Write the combined config (permissions + extension fields) to it.
+  const extensionConfigPath = join(policyDir, "pi-permissions.jsonc");
   writeFileSync(extensionConfigPath, configContent, "utf8");
 
   process.env.PI_CODING_AGENT_DIR = policyDir;
   process.env[POLICY_AGENT_DIR_ENV_KEY] = policyDir;
-  process.env[CONFIG_PATH_ENV_KEY] = extensionConfigPath;
   process.env[LOGS_DIR_ENV_KEY] = logsDir;
   for (const key of SUBAGENT_ENV_KEYS) {
     delete process.env[key];
@@ -536,7 +525,7 @@ const tests: IssueTest[] = [
 
   {
     name: "savePermissionSystemConfig preserves permission fields when config uses trailing commas",
-    kind: "red",
+    kind: "regression",
     scenario:
       "If the user's config file uses trailing commas (valid JSONC), saving must preserve permission data.",
     fn: () => {
@@ -664,36 +653,6 @@ const tests: IssueTest[] = [
             `Permission field '${key}' must be preserved when adding extension fields`,
           );
         }
-      } finally {
-        cleanup();
-      }
-    },
-  },
-
-  // =========================================================================
-  // ensurePermissionSystemConfig must not overwrite an existing config
-  // =========================================================================
-
-  {
-    name: "ensurePermissionSystemConfig does not overwrite an existing config with permissions",
-    kind: "regression",
-    scenario:
-      "ensurePermissionSystemConfig must be a no-op when the config file already exists, even if it "
-      + "contains permission fields. It must never replace an existing file.",
-    fn: () => {
-      const { configPath, cleanup } = createIsolatedConfigDir(
-        `${JSON.stringify(ISSUE_CONFIG_WITH_PERMISSIONS, null, 2)}\n`,
-      );
-
-      try {
-        const result = ensurePermissionSystemConfig(configPath);
-        assert.equal(result.created, false, "should not create a new file when one exists");
-
-        const raw = readRawConfig(configPath);
-        // Everything must be untouched.
-        assert.deepEqual(raw.defaultPolicy, ISSUE_CONFIG_WITH_PERMISSIONS.defaultPolicy);
-        assert.deepEqual(raw.tools, ISSUE_CONFIG_WITH_PERMISSIONS.tools);
-        assert.equal(raw.debug, false);
       } finally {
         cleanup();
       }
@@ -1149,52 +1108,6 @@ const tests: IssueTest[] = [
         typeof saved === "object" && saved !== null && "success" in saved,
         "save must return a result object, not throw",
       );
-    },
-  },
-
-  // =========================================================================
-  // Config created from scratch (ensurePermissionSystemConfig) should not
-  // contain permission fields — it should only have extension defaults.
-  // =========================================================================
-
-  {
-    name: "ensurePermissionSystemConfig creates a default extension-only config when no file exists",
-    kind: "regression",
-    scenario:
-      "When no config file exists, ensurePermissionSystemConfig should create one with only the default "
-      + "extension fields (debug, yoloMode, forwardedPromptTimeoutSeconds).",
-    fn: () => {
-      const baseDir = mkdtempSync(join(tmpdir(), "pi-permission-system-issue31-new-"));
-      const configPath = join(baseDir, "config.json");
-      const originalConfigEnv = process.env[CONFIG_PATH_ENV_KEY];
-
-      try {
-        process.env[CONFIG_PATH_ENV_KEY] = configPath;
-
-        assert.equal(existsSync(configPath), false);
-        const result = ensurePermissionSystemConfig(configPath);
-        assert.equal(result.created, true);
-        assert.equal(existsSync(configPath), true);
-
-        const raw = readRawConfig(configPath);
-        assert.equal(raw.debug, false);
-        assert.equal(raw.yoloMode, false);
-        assert.equal(raw.forwardedPromptTimeoutSeconds, 30);
-        // No permission fields should exist in a freshly created config.
-        for (const key of PERMISSION_KEYS) {
-          assert.ok(
-            !Object.prototype.hasOwnProperty.call(raw, key),
-            `Freshly created config should not contain '${key}'`,
-          );
-        }
-      } finally {
-        if (originalConfigEnv === undefined) {
-          delete process.env[CONFIG_PATH_ENV_KEY];
-        } else {
-          process.env[CONFIG_PATH_ENV_KEY] = originalConfigEnv;
-        }
-        rmSync(baseDir, { recursive: true, force: true });
-      }
     },
   },
 
@@ -1738,7 +1651,7 @@ const tests: IssueTest[] = [
 
   {
     name: "savePermissionSystemConfig preserves permissions when config file has a UTF-8 BOM",
-    kind: "red",
+    kind: "regression",
     scenario:
       "Windows editors commonly add a BOM (\\uFEFF) to JSON files. The JSONC parser may choke on this, causing "
       + "loadPermissionSystemConfig to return defaults. Saving must still preserve all permission fields that "
@@ -1890,7 +1803,7 @@ const tests: IssueTest[] = [
       const baseDir = mkdtempSync(join(tmpdir(), "pi-permission-system-issue31-symlink-"));
       const realConfigPath = join(baseDir, "real-config.json");
       const symlinkConfigPath = join(baseDir, "config.json");
-      const originalConfigEnv = process.env[CONFIG_PATH_ENV_KEY];
+      const originalConfigEnv = process.env[POLICY_AGENT_DIR_ENV_KEY];
 
       try {
         writeFileSync(
@@ -1899,7 +1812,7 @@ const tests: IssueTest[] = [
           "utf8",
         );
         symlinkSync(realConfigPath, symlinkConfigPath);
-        process.env[CONFIG_PATH_ENV_KEY] = symlinkConfigPath;
+        process.env[POLICY_AGENT_DIR_ENV_KEY] = baseDir;
 
         const loaded = loadPermissionSystemConfig(symlinkConfigPath);
         const saved = savePermissionSystemConfig(
@@ -1926,9 +1839,9 @@ const tests: IssueTest[] = [
         }
       } finally {
         if (originalConfigEnv === undefined) {
-          delete process.env[CONFIG_PATH_ENV_KEY];
+          delete process.env[POLICY_AGENT_DIR_ENV_KEY];
         } else {
-          process.env[CONFIG_PATH_ENV_KEY] = originalConfigEnv;
+          process.env[POLICY_AGENT_DIR_ENV_KEY] = originalConfigEnv;
         }
         rmSync(baseDir, { recursive: true, force: true });
       }
@@ -1982,7 +1895,7 @@ const tests: IssueTest[] = [
 
   {
     name: "savePermissionSystemConfig preserves permissions when config file has duplicate keys",
-    kind: "red",
+    kind: "regression",
     scenario:
       "JSONC parsers may take the last value for duplicate keys. If the config has duplicate debug keys, "
       + "saving must still preserve all permission fields.",

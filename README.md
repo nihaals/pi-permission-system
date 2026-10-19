@@ -107,7 +107,7 @@ If you are coming from OpenCode, you usually do **not** need to rewrite your who
 - **Per-Agent Overrides** — Agent-specific permission policies via YAML frontmatter
 - **Subagent Permission Forwarding** — Forwards `ask` confirmations from non-UI subagents back to the main interactive session
 - **Runtime YOLO Control** — Lets users toggle yolo mode from the settings modal and lets other extensions toggle it through the runtime API
-- **File-Based Debug Logging** — Writes verbose diagnostics and permission request/denial review entries to one debug file when enabled in `config.json`, including the responsible agent and raw tool-call input
+- **File-Based Debug Logging** — Writes verbose diagnostics and permission request/denial review entries to one debug file when enabled in the policy file, including the responsible agent and raw tool-call input
 - **JSON Schema Validation** — Full schema for editor autocomplete and config validation
 - **External Directory Guard** — Enforces `special.external_directory` for path-bearing file tools that target paths outside the active working directory
 
@@ -191,29 +191,19 @@ The extension integrates via Pi's lifecycle hooks:
 
 ## Configuration
 
-### Extension Config File
+### Extension Settings (in the Policy File)
 
-**Location:** global Pi extension config (default: `~/.pi/agent/extensions/pi-permission-system/config.json`, respects `PI_CODING_AGENT_DIR`)
-
-Set `PI_PERMISSION_SYSTEM_CONFIG_PATH` to point this extension at a specific config file when the default global path is not appropriate.
-
-The extension creates this file automatically when it is missing. It controls extension-local debug logging behavior and yolo mode defaults:
-
-```json
-{
-  "enabled": true,
-  "debug": false,
-  "yoloMode": false,
-  "escapeAction": "reject"
-}
-```
+Extension settings live as top-level keys of the **Global Policy File** above (`pi-permissions.jsonc`), alongside the permission sections. There is no separate `config.json`; a missing policy file simply means defaults, and nothing is created on disk until you edit it or change a setting in `/permission-system`.
 
 | Key | Default | Description |
 |-----|---------|-------------|
-| `enabled` | `true` | Master switch. When `false`, the extension skips all registrations and startup work (permission hooks, commands, runtime API, forwarding). |
-| `debug` | `false` | Enables verbose diagnostics and permission review entries in `logs/pi-permission-system-debug.jsonl` |
+| `enabled` | `true` | Master switch. When `false`, the extension skips all registrations and startup work (permission hooks, commands, runtime API, forwarding). Hand-edit only; never written by the extension. |
+| `debug` | `false` | Enables verbose diagnostics and permission review entries in the extension debug log (under the extension install directory; set `PI_PERMISSION_SYSTEM_LOGS_DIR` to redirect) |
 | `yoloMode` | `false` | Auto-approves `ask` results instead of prompting when yolo mode is enabled |
+| `forwardedPromptTimeoutSeconds` | `30` | Seconds before an unanswered forwarded subagent permission prompt auto-denies. `null` (or `false`) waits indefinitely. |
 | `escapeAction` | `reject` | Behavior when `esc` is pressed at a permission prompt. `reject` denies immediately with no reason; `reject_with_reason` opens the rejection-reason input so a denial reason can be attached. |
+
+All of these keys (except `enabled`) can be inspected or changed interactively via `/permission-system`; saves preserve JSONC comments, formatting, and all other keys.
 
 Debug output writes only under the extension directory by default. Set `PI_PERMISSION_SYSTEM_LOGS_DIR` to redirect the debug file to a specific directory. No debug output is printed to the terminal.
 
@@ -242,7 +232,7 @@ pi.registerShortcut("f8", {
 });
 ```
 
-The runtime API exposes `getYoloMode()`, `setYoloMode(enabled, options?)`, and `toggleYoloMode(options?)`. Runtime updates persist to `config.json` by default; pass `{ persist: false }` for a current-session-only toggle.
+The runtime API exposes `getYoloMode()`, `setYoloMode(enabled, options?)`, and `toggleYoloMode(options?)`. Runtime updates persist to the policy file (`pi-permissions.jsonc`) by default; pass `{ persist: false }` for a current-session-only toggle.
 
 ### Global Policy File
 

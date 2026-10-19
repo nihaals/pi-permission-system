@@ -1,4 +1,9 @@
 {
+  "enabled": true,
+  "debug": false,
+  "yoloMode": false,
+  "forwardedPromptTimeoutSeconds": 30,
+  "escapeAction": "reject",
   "defaultPolicy": {
     "tools": "ask",
     "bash": "ask",

@@ -8,6 +8,33 @@
     "$schema": {
       "type": "string"
     },
+    "enabled": {
+      "description": "Master switch for the pi-permission-system extension. When `false`, the extension skips all registrations and startup work (permission hooks, commands, runtime API, forwarding). Hand-edit only; never written by the extension.",
+      "type": "boolean",
+      "default": true
+    },
+    "debug": {
+      "description": "Enables verbose diagnostics and permission review entries in the extension debug log.",
+      "type": "boolean",
+      "default": false
+    },
+    "yoloMode": {
+      "description": "Auto-approves `ask` results instead of prompting, including subagent approval forwarding.",
+      "type": "boolean",
+      "default": false
+    },
+    "forwardedPromptTimeoutSeconds": {
+      "description": "Seconds before an unanswered forwarded subagent permission prompt auto-denies. Use `null` (or `false`) to wait indefinitely.",
+      "type": ["number", "null"],
+      "exclusiveMinimum": 0,
+      "default": 30
+    },
+    "escapeAction": {
+      "description": "Behavior when `esc` is pressed at a permission prompt. `reject` denies immediately with no reason; `reject_with_reason` prompts for an optional denial reason before rejecting.",
+      "type": "string",
+      "enum": ["reject", "reject_with_reason"],
+      "default": "reject"
+    },
     "defaultPolicy": {
       "type": "object",
       "additionalProperties": false,

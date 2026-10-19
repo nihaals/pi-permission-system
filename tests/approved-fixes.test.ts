@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { parseSimpleYamlMap } from "../src/common.js";
-import { DEFAULT_EXTENSION_CONFIG, LOGS_DIR_ENV_KEY, CONFIG_PATH_ENV_KEY } from "../src/extension-config.js";
+import { DEFAULT_EXTENSION_CONFIG, LOGS_DIR_ENV_KEY, POLICY_AGENT_DIR_ENV_KEY } from "../src/extension-config.js";
 import piPermissionSystemExtension, { processForwardedPermissionRequests, setExtensionConfig } from "../src/index.js";
 import { createPermissionSystemLogger } from "../src/logging.js";
 import {
@@ -47,10 +47,8 @@ function createHarness(baseDir = mkdtempSync(join(tmpdir(), "pi-permission-syste
   const prompts: string[] = [];
   const handlers: Record<string, MockHandler> = {};
   const originalAgentDir = process.env.PI_CODING_AGENT_DIR;
-  const originalConfigPath = process.env[CONFIG_PATH_ENV_KEY];
   const originalLogsDir = process.env[LOGS_DIR_ENV_KEY];
   const originalPolicyAgentDir = process.env[PI_PERMISSION_SYSTEM_POLICY_AGENT_DIR_ENV_KEY];
-  const extensionConfigPath = join(baseDir, "extension-config.json");
   const logsDir = join(baseDir, "logs");
 
   mkdirSync(join(baseDir, "agents"), { recursive: true });
@@ -65,10 +63,8 @@ function createHarness(baseDir = mkdtempSync(join(tmpdir(), "pi-permission-syste
     `${JSON.stringify({ defaultPolicy: ASK_BASH_POLICY }, null, 2)}\n`,
     "utf8",
   );
-  writeFileSync(extensionConfigPath, `${JSON.stringify(DEFAULT_EXTENSION_CONFIG, null, 2)}\n`, "utf8");
 
   process.env.PI_CODING_AGENT_DIR = baseDir;
-  process.env[CONFIG_PATH_ENV_KEY] = extensionConfigPath;
   process.env[LOGS_DIR_ENV_KEY] = logsDir;
   process.env[PI_PERMISSION_SYSTEM_POLICY_AGENT_DIR_ENV_KEY] = baseDir;
 
@@ -94,11 +90,6 @@ function createHarness(baseDir = mkdtempSync(join(tmpdir(), "pi-permission-syste
         delete process.env.PI_CODING_AGENT_DIR;
       } else {
         process.env.PI_CODING_AGENT_DIR = originalAgentDir;
-      }
-      if (originalConfigPath === undefined) {
-        delete process.env[CONFIG_PATH_ENV_KEY];
-      } else {
-        process.env[CONFIG_PATH_ENV_KEY] = originalConfigPath;
       }
       if (originalLogsDir === undefined) {
         delete process.env[LOGS_DIR_ENV_KEY];

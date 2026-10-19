@@ -1,5 +1,5 @@
-import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import { readFileSync, statSync } from "node:fs";
+
 import { join, relative, resolve } from "node:path";
 
 import {
@@ -11,6 +11,7 @@ import {
   parseSimpleYamlMap,
   toRecord,
 } from "./common.js";
+import { getPolicyAgentDir } from "./extension-config.js";
 import { formatJsoncConfigLoadWarning, parseJsoncConfig } from "./jsonc-config.js";
 import type {
   AgentPermissions,
@@ -26,12 +27,7 @@ import {
   type CompiledWildcardPattern,
 } from "./wildcard-matcher.js";
 
-const PERMISSION_POLICY_AGENT_DIR_ENV_KEY = "PI_PERMISSION_SYSTEM_POLICY_AGENT_DIR";
-
-function defaultPolicyAgentDir(): string {
-  const override = process.env[PERMISSION_POLICY_AGENT_DIR_ENV_KEY]?.trim();
-  return override ? resolve(override) : getAgentDir();
-}
+function defaultPolicyAgentDir(): string { return getPolicyAgentDir(); }
 
 function defaultGlobalConfigPath(): string { return join(defaultPolicyAgentDir(), "pi-permissions.jsonc"); }
 function defaultAgentsDir(): string { return join(defaultPolicyAgentDir(), "agents"); }

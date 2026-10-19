@@ -10,7 +10,6 @@ import {
   shouldApplyCachedAgentStartState,
 } from "../src/before-agent-start-cache.js";
 import {
-  CONFIG_PATH_ENV_KEY,
   DEFAULT_EXTENSION_CONFIG,
   LOGS_DIR_ENV_KEY,
   loadPermissionSystemConfig,
@@ -19,6 +18,7 @@ import {
   type PermissionSystemExtensionConfig,
 } from "../src/extension-config.js";
 import { createPermissionSystemLogger } from "../src/logging.js";
+import { parseJsoncConfig } from "../src/jsonc-config.js";
 import {
   createPermissionForwardingLocation,
   isForwardedPermissionRequestForSession,
@@ -180,24 +180,21 @@ function createToolCallHarness(
   const prompts: string[] = [];
   const handlers: Record<string, MockHandler> = {};
   const registeredEvents: string[] = [];
-  const extensionConfigPath = join(baseDir, "extension-config.json");
   const logsDir = join(baseDir, "extension-logs");
   const debugPath = join(logsDir, "pi-permission-system-debug.jsonl");
   const originalAgentDir = process.env.PI_CODING_AGENT_DIR;
-  const originalConfigPath = process.env[CONFIG_PATH_ENV_KEY];
   const originalLogsDir = process.env[LOGS_DIR_ENV_KEY];
 
   mkdirSync(join(baseDir, "agents"), { recursive: true });
   mkdirSync(cwd, { recursive: true });
-  writeFileSync(join(baseDir, "pi-permissions.jsonc"), `${JSON.stringify(config, null, 2)}\n`, "utf8");
+  // Extension settings now live in the same JSONC policy file as permissions.
   writeFileSync(
-    extensionConfigPath,
-    `${JSON.stringify(options.extensionConfig ?? DEFAULT_EXTENSION_CONFIG, null, 2)}\n`,
+    join(baseDir, "pi-permissions.jsonc"),
+    `${JSON.stringify({ ...config, ...(options.extensionConfig ?? DEFAULT_EXTENSION_CONFIG) }, null, 2)}\n`,
     "utf8",
   );
 
   process.env.PI_CODING_AGENT_DIR = baseDir;
-  process.env[CONFIG_PATH_ENV_KEY] = extensionConfigPath;
   process.env[LOGS_DIR_ENV_KEY] = logsDir;
   try {
     piPermissionSystemExtension({
@@ -230,11 +227,6 @@ function createToolCallHarness(
     debugPath,
     cleanup: async (): Promise<void> => {
       await Promise.resolve(handlers.session_shutdown?.({}, createMockContext(cwd, prompts, options)));
-      if (originalConfigPath === undefined) {
-        delete process.env[CONFIG_PATH_ENV_KEY];
-      } else {
-        process.env[CONFIG_PATH_ENV_KEY] = originalConfigPath;
-      }
       if (originalLogsDir === undefined) {
         delete process.env[LOGS_DIR_ENV_KEY];
       } else {
@@ -386,22 +378,16 @@ await runAsyncTest("Extension dedupes identical permission parse warnings across
   }
 });
 
-runTest("Permission-system extension config defaults debug and yolo mode off", () => {
+runTest("Permission-system extension config uses defaults without creating a file when none exists", () => {
   const baseDir = mkdtempSync(join(tmpdir(), "pi-permission-system-config-"));
-  const configPath = join(baseDir, "config.json");
+  const configPath = join(baseDir, "pi-permissions.jsonc");
 
   try {
     const result = loadPermissionSystemConfig(configPath);
-    assert.equal(result.created, true);
     assert.equal(result.warning, undefined);
     assert.deepEqual(result.config, DEFAULT_EXTENSION_CONFIG);
-    assert.equal(existsSync(configPath), true);
-
-    const raw = JSON.parse(readFileSync(configPath, "utf8")) as Record<string, unknown>;
-    assert.deepEqual(Object.keys(raw).sort(), ["debug", "enabled", "forwardedPromptTimeoutSeconds", "yoloMode"]);
-    assert.equal(raw.enabled, true);
-    assert.equal(raw.debug, false);
-    assert.equal(raw.yoloMode, false);
+    // A missing file must not be created as a side effect of loading.
+    assert.equal(existsSync(configPath), false);
   } finally {
     rmSync(baseDir, { recursive: true, force: true });
   }
@@ -422,13 +408,13 @@ runTest("Permission-system extension config loads debug and yolo mode when expli
     );
 
     const result = loadPermissionSystemConfig(configPath);
-    assert.equal(result.created, false);
     assert.equal(result.warning, undefined);
     assert.deepEqual(result.config, {
       enabled: true,
       debug: true,
       yoloMode: true,
       forwardedPromptTimeoutSeconds: 30,
+      escapeAction: "reject",
     });
   } finally {
     rmSync(baseDir, { recursive: true, force: true });
@@ -452,13 +438,13 @@ runTest("Permission-system extension config accepts JSONC comments and trailing 
     );
 
     const result = loadPermissionSystemConfig(configPath);
-    assert.equal(result.created, false);
     assert.equal(result.warning, undefined);
     assert.deepEqual(result.config, {
       enabled: true,
       debug: true,
       yoloMode: true,
       forwardedPromptTimeoutSeconds: 30,
+      escapeAction: "reject",
     });
   } finally {
     rmSync(baseDir, { recursive: true, force: true });
@@ -481,11 +467,10 @@ runTest("Permission-system extension config reports one-line JSONC parse warning
     );
 
     const result = loadPermissionSystemConfig(configPath);
-    assert.equal(result.created, false);
     assert.deepEqual(result.config, DEFAULT_EXTENSION_CONFIG);
-    assert.match(result.warning || "", /Failed to parse permission-system config at/);
+    assert.match(result.warning || "", /Failed to parse permission policy file at/);
     assert.match(result.warning || "", /line 2, column/);
-    assert.match(result.warning || "", /using default extension config\./);
+    assert.match(result.warning || "", /using default extension settings\./);
     assert.equal((result.warning || "").includes("\n"), false);
   } finally {
     rmSync(baseDir, { recursive: true, force: true });
@@ -507,7 +492,6 @@ runTest("Permission-system extension config normalizes invalid persisted values 
     );
 
     const result = loadPermissionSystemConfig(configPath);
-    assert.equal(result.created, false);
     assert.equal(result.warning, undefined);
     assert.deepEqual(result.config, DEFAULT_EXTENSION_CONFIG);
   } finally {
@@ -538,7 +522,66 @@ runTest("Permission-system extension config save persists normalized config", ()
       debug: true,
       yoloMode: true,
       forwardedPromptTimeoutSeconds: 30,
+      escapeAction: "reject",
     });
+  } finally {
+    rmSync(baseDir, { recursive: true, force: true });
+  }
+});
+
+runTest("Permission-system extension config save preserves JSONC comments and other keys", () => {
+  const baseDir = mkdtempSync(join(tmpdir(), "pi-permission-system-config-save-comments-"));
+  const configPath = join(baseDir, "pi-permissions.jsonc");
+
+  try {
+    writeFileSync(
+      configPath,
+      `{
+  // Permission policy — hand-tuned, do not lose these comments.
+  "defaultPolicy": {
+    "tools": "ask", // every tool asks
+    "bash": "ask",
+    "mcp": "ask",
+    "skills": "ask",
+    "special": "ask"
+  },
+  "tools": {
+    "read": "allow"
+  },
+  // Extension settings
+  "debug": false,
+  "yoloMode": false
+}
+`,
+      "utf8",
+    );
+
+    const saved = savePermissionSystemConfig(
+      {
+        debug: true,
+        yoloMode: false,
+        forwardedPromptTimeoutSeconds: 30,
+        escapeAction: "reject_with_reason",
+      },
+      configPath,
+    );
+
+    assert.equal(saved.success, true);
+
+    const rawText = readFileSync(configPath, "utf8");
+    assert.match(rawText, /Permission policy — hand-tuned/);
+    assert.match(rawText, /every tool asks/);
+    assert.match(rawText, /Extension settings/);
+
+    const result = loadPermissionSystemConfig(configPath);
+    assert.equal(result.warning, undefined);
+    assert.equal(result.config.debug, true);
+    assert.equal(result.config.escapeAction, "reject_with_reason");
+    // Permission sections must survive the save.
+    const parsed = parseJsoncConfig(rawText, configPath, "test policy") as Record<string, unknown>;
+    const tools = parsed.tools as Record<string, unknown>;
+    assert.equal(tools.read, "allow");
+    assert.ok(parsed.defaultPolicy, "defaultPolicy must be preserved");
   } finally {
     rmSync(baseDir, { recursive: true, force: true });
   }

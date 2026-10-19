@@ -26,7 +26,7 @@ import {
 } from "./permission-dialog.js";
 import {
   DEFAULT_EXTENSION_CONFIG,
-  getPermissionSystemConfigPath,
+  getPolicyFilePath,
   loadPermissionSystemConfig,
   normalizePermissionSystemConfig,
   savePermissionSystemConfig,
@@ -1375,7 +1375,6 @@ export default function piPermissionSystemExtension(pi: ExtensionAPI): void {
     }
 
     writeDebugEntry("config.loaded", {
-      created: result.created,
       warning: result.warning ?? null,
       debug: result.config.debug,
       yoloMode: result.config.yoloMode,
@@ -1508,7 +1507,7 @@ export default function piPermissionSystemExtension(pi: ExtensionAPI): void {
       await openPermissionSystemSettingsModal(ctx, {
         getConfig: () => extensionConfig,
         setConfig: saveExtensionConfig,
-        getConfigPath: getPermissionSystemConfigPath,
+        getConfigPath: getPolicyFilePath,
       });
     }),
   });

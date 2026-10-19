@@ -1,6 +1,9 @@
+import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import { existsSync, lstatSync, mkdirSync, readFileSync, realpathSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+
+import { applyEdits, modify, parseTree, type ParseError as JsoncParseError } from "jsonc-parser";
 
 import { toRecord } from "./common.js";
 import { formatJsoncConfigLoadWarning, isNodeErrorWithCode, parseJsoncConfig } from "./jsonc-config.js";
@@ -8,8 +11,13 @@ import { normalizePermissionEscapeAction, type PermissionEscapeAction } from "./
 
 export const EXTENSION_ID = "pi-permission-system";
 
+/**
+ * Extension settings. These live as optional top-level keys of the global policy
+ * file (`pi-permissions.jsonc`) alongside the permission sections; see the JSON
+ * schema for the documented shape and defaults.
+ */
 export interface PermissionSystemExtensionConfig {
-  /** Master switch. When false, the extension skips all registrations and startup work. */
+  /** Master switch. When false, the extension skips all registrations and startup work. Hand-edit only. */
   enabled?: boolean;
   debug: boolean;
   yoloMode: boolean;
@@ -20,7 +28,6 @@ export interface PermissionSystemExtensionConfig {
 
 export interface PermissionSystemConfigLoadResult {
   config: PermissionSystemExtensionConfig;
-  created: boolean;
   warning?: string;
 }
 
@@ -42,22 +49,24 @@ export function resolveExtensionRoot(moduleUrl = import.meta.url): string {
 }
 
 export const EXTENSION_ROOT = resolveExtensionRoot();
-export const CONFIG_PATH = join(EXTENSION_ROOT, "config.json");
 export const LOGS_DIR = join(EXTENSION_ROOT, "logs");
-export const CONFIG_PATH_ENV_KEY = "PI_PERMISSION_SYSTEM_CONFIG_PATH";
+export const POLICY_AGENT_DIR_ENV_KEY = "PI_PERMISSION_SYSTEM_POLICY_AGENT_DIR";
 export const LOGS_DIR_ENV_KEY = "PI_PERMISSION_SYSTEM_LOGS_DIR";
 
-function resolveOverridablePath(explicitValue: string | undefined, envKey: string, defaultValue: string): string {
-  const overridePath = process.env[envKey]?.trim();
-  return explicitValue || overridePath || defaultValue;
+/** Root directory holding the global policy file and per-agent permission overrides. */
+export function getPolicyAgentDir(): string {
+  const override = process.env[POLICY_AGENT_DIR_ENV_KEY]?.trim();
+  return override ? resolve(override) : getAgentDir();
 }
 
-export function getPermissionSystemConfigPath(configPath?: string): string {
-  return resolveOverridablePath(configPath, CONFIG_PATH_ENV_KEY, CONFIG_PATH);
+/** Global policy file: permission sections plus extension settings. */
+export function getPolicyFilePath(): string {
+  return join(getPolicyAgentDir(), "pi-permissions.jsonc");
 }
 
 export function getPermissionSystemLogsDir(logsDir?: string): string {
-  return resolveOverridablePath(logsDir, LOGS_DIR_ENV_KEY, LOGS_DIR);
+  const overridePath = process.env[LOGS_DIR_ENV_KEY]?.trim();
+  return logsDir || overridePath || LOGS_DIR;
 }
 
 export function getPermissionSystemDebugPath(logsDir = getPermissionSystemLogsDir()): string {
@@ -72,10 +81,6 @@ export function cloneDefaultConfig(): PermissionSystemExtensionConfig {
     forwardedPromptTimeoutSeconds: DEFAULT_EXTENSION_CONFIG.forwardedPromptTimeoutSeconds,
     escapeAction: DEFAULT_EXTENSION_CONFIG.escapeAction,
   };
-}
-
-function createDefaultConfigContent(): string {
-  return `${JSON.stringify(DEFAULT_EXTENSION_CONFIG, null, 2)}\n`;
 }
 
 export function normalizePermissionSystemConfig(raw: unknown): PermissionSystemExtensionConfig {
@@ -98,129 +103,52 @@ export function normalizePermissionSystemConfig(raw: unknown): PermissionSystemE
   };
 }
 
-function ensureConfigDirectory(configPath: string): void {
-  mkdirSync(dirname(configPath), { recursive: true });
-}
-
-export function ensurePermissionSystemConfig(configPath = getPermissionSystemConfigPath()): { created: boolean; warning?: string } {
-  if (existsSync(configPath)) {
-    return { created: false };
-  }
-
+/**
+ * Loads extension settings from the global policy file. A missing file is not an
+ * error: defaults are used and nothing is written to disk.
+ */
+export function loadPermissionSystemConfig(policyPath = getPolicyFilePath()): PermissionSystemConfigLoadResult {
+  let raw: string;
   try {
-    ensureConfigDirectory(configPath);
-    writeFileSync(configPath, createDefaultConfigContent(), "utf-8");
-    return { created: true };
+    raw = readFileSync(policyPath, "utf-8");
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    if (isNodeErrorWithCode(error, "ENOENT")) {
+      return { config: cloneDefaultConfig() };
+    }
     return {
-      created: false,
-      warning: `Failed to initialize permission-system config at '${configPath}': ${message}`,
+      config: cloneDefaultConfig(),
+      warning: `Failed to read permission-system settings from '${policyPath}': ${error instanceof Error ? error.message : String(error)}`,
     };
   }
-}
-
-export function loadPermissionSystemConfig(configPath = getPermissionSystemConfigPath()): PermissionSystemConfigLoadResult {
-  const ensureResult = ensurePermissionSystemConfig(configPath);
 
   try {
-    const raw = readFileSync(configPath, "utf-8");
-    const parsed = parseJsoncConfig(raw, configPath, "permission-system config");
-    const config = normalizePermissionSystemConfig(parsed);
-    return {
-      config,
-      created: ensureResult.created,
-      warning: ensureResult.warning,
-    };
+    // Strip a UTF-8 BOM if present so the JSONC parser can handle it.
+    const bomStripped = raw.charCodeAt(0) === 0xfeff ? raw.slice(1) : raw;
+    const parsed = parseJsoncConfig(bomStripped, policyPath, "permission policy file");
+    return { config: normalizePermissionSystemConfig(parsed) };
   } catch (error) {
     return {
       config: cloneDefaultConfig(),
-      created: ensureResult.created,
-      warning: ensureResult.warning
-        ?? formatJsoncConfigLoadWarning(configPath, error, "permission-system config", "using default extension config")
+      warning: formatJsoncConfigLoadWarning(policyPath, error, "permission policy file", "using default extension settings")
         ?? undefined,
     };
   }
 }
 
-/**
- * Extension-managed keys that are written/updated by savePermissionSystemConfig.
- * All other keys in the config file are preserved as-is.
- */
-const EXTENSION_CONFIG_KEYS: readonly (keyof PermissionSystemExtensionConfig)[] = [
-  "debug",
-  "yoloMode",
-  "forwardedPromptTimeoutSeconds",
-  "escapeAction",
-];
+/** Extension-managed keys. `enabled` is intentionally excluded: it is hand-edit only. */
+const MANAGED_SETTINGS_KEYS = ["debug", "yoloMode", "forwardedPromptTimeoutSeconds", "escapeAction"] as const;
 
-/**
- * Reads the existing config file and returns a parsed object plus a flag
- * indicating whether the file was readable and parseable.
- *
- * - Returns null when the file does not exist (caller should create fresh).
- * - Returns { parseError: true } when the file exists but cannot be parsed.
- *   The caller MUST NOT overwrite a corrupt file with only extension defaults.
- */
-function readExistingConfig(
-  configPath: string,
-): { record: Record<string, unknown> | null; parseError: boolean } {
-  if (!existsSync(configPath)) {
-    return { record: null, parseError: false };
+function formatSaveValue(key: (typeof MANAGED_SETTINGS_KEYS)[number], config: PermissionSystemExtensionConfig): unknown {
+  switch (key) {
+    case "debug":
+      return config.debug;
+    case "yoloMode":
+      return config.yoloMode;
+    case "forwardedPromptTimeoutSeconds":
+      return config.forwardedPromptTimeoutSeconds;
+    case "escapeAction":
+      return config.escapeAction ?? DEFAULT_EXTENSION_CONFIG.escapeAction;
   }
-
-  try {
-    const raw = readFileSync(configPath, "utf-8");
-    // Strip a UTF-8 BOM if present so the JSONC parser can handle it.
-    const bomStripped = raw.charCodeAt(0) === 0xfeff ? raw.slice(1) : raw;
-    const parsed = parseJsoncConfig(bomStripped, configPath, "permission-system config");
-    const record = toRecord(parsed);
-    return { record, parseError: false };
-  } catch {
-    return { record: null, parseError: true };
-  }
-}
-
-/**
- * Merges the normalized extension fields into the existing config record.
- *
- * - If an extension key already exists in the record, its value is updated in place
- *   (preserving key ordering).
- * - If an extension key does not exist, it is appended at the end.
- * - All non-extension keys (permissions, custom keys, $schema, etc.) are left untouched.
- * - Prototype-pollution keys (__proto__, constructor, prototype) are stripped.
- */
-function mergeExtensionFields(
-  existing: Record<string, unknown>,
-  normalized: PermissionSystemExtensionConfig,
-): Record<string, unknown> {
-  // Build a safe copy that excludes prototype-pollution keys.
-  const merged: Record<string, unknown> = {};
-  for (const key of Object.keys(existing)) {
-    if (key === "__proto__" || key === "constructor" || key === "prototype") {
-      continue;
-    }
-    merged[key] = existing[key];
-  }
-
-  const normalizedRecord: Record<string, unknown> = {
-    debug: normalized.debug,
-    yoloMode: normalized.yoloMode,
-    forwardedPromptTimeoutSeconds: normalized.forwardedPromptTimeoutSeconds,
-    escapeAction: normalized.escapeAction ?? DEFAULT_EXTENSION_CONFIG.escapeAction,
-  };
-
-  for (const key of EXTENSION_CONFIG_KEYS) {
-    if (Object.prototype.hasOwnProperty.call(merged, key)) {
-      // Update in place — preserves original key ordering.
-      merged[key] = normalizedRecord[key];
-    } else {
-      // Append at the end.
-      merged[key] = normalizedRecord[key];
-    }
-  }
-
-  return merged;
 }
 
 /**
@@ -245,36 +173,97 @@ function resolveWriteTarget(configPath: string): { writePath: string; isSymlink:
   return { writePath: configPath, isSymlink: false };
 }
 
+/**
+ * Detects duplicate root-level occurrences of any managed settings key. JSONC
+ * last-wins parsing makes such files ambiguous for textual edits (which can only
+ * update one occurrence), so they need the re-serialization fallback.
+ */
+function hasDuplicateManagedKeys(tree: NonNullable<ReturnType<typeof parseTree>>): boolean {
+  const seen = new Set<string>();
+  for (const property of tree.children ?? []) {
+    const keyNode = (property.children ?? [])[0];
+    const name = typeof keyNode?.value === "string" ? keyNode.value : "";
+    if (MANAGED_SETTINGS_KEYS.includes(name as (typeof MANAGED_SETTINGS_KEYS)[number])) {
+      if (seen.has(name)) {
+        return true;
+      }
+      seen.add(name);
+    }
+  }
+  return false;
+}
+
+/**
+ * Saves extension settings into the global policy file using JSONC tree edits so
+ * that comments, formatting, and all other keys (permissions, custom keys) are
+ * preserved verbatim.
+ *
+ * - If the file does not exist, it is created with the managed settings only.
+ * - If the file cannot be parsed, saving is refused so existing permission data
+ *   is never destroyed.
+ * - Files with duplicate settings keys (last-wins in JSONC) cannot be edited
+ *   textually; they fall back to a clean re-serialization of the parsed record.
+ */
 export function savePermissionSystemConfig(
   config: PermissionSystemExtensionConfig,
-  configPath = getPermissionSystemConfigPath(),
+  policyPath = getPolicyFilePath(),
 ): PermissionSystemConfigSaveResult {
   const normalized = normalizePermissionSystemConfig(config);
 
-  // Read the existing file to preserve all non-extension keys.
-  const existing = readExistingConfig(configPath);
-
-  if (existing.parseError) {
-    // The file exists but cannot be parsed. We MUST NOT overwrite it with
-    // only the extension fields, as that would destroy potentially salvageable
-    // permission data. Return a failure so the caller can inform the user.
-    return {
-      success: false,
-      error: `Refusing to save permission-system config at '${configPath}': the existing file is corrupt or unparseable. Manual intervention is required to preserve existing permission data.`,
-    };
+  let text: string;
+  if (existsSync(policyPath)) {
+    try {
+      text = readFileSync(policyPath, "utf-8");
+    } catch (error) {
+      return {
+        success: false,
+        error: `Failed to read permission policy file at '${policyPath}': ${error instanceof Error ? error.message : String(error)}`,
+      };
+    }
+    // Strip a UTF-8 BOM if present so the JSONC parser can handle the content.
+    text = text.charCodeAt(0) === 0xfeff ? text.slice(1) : text;
+  } else {
+    text = `${JSON.stringify(
+      Object.fromEntries(MANAGED_SETTINGS_KEYS.map((key) => [key, formatSaveValue(key, normalized)])),
+      null,
+      2,
+    )}\n`;
   }
 
-  // Merge extension fields into the existing record (or start fresh if no file).
-  const baseRecord = existing.record ?? {};
-  const merged = mergeExtensionFields(baseRecord, normalized);
+  // Apply one key at a time, re-parsing between keys so insertion offsets are
+  // always computed against the current document (comments are untouched).
+  for (const key of MANAGED_SETTINGS_KEYS) {
+    const parseErrors: JsoncParseError[] = [];
+    const tree = parseTree(text, parseErrors, { allowTrailingComma: true });
+    if (parseErrors.length > 0 || !tree || tree.type !== "object") {
+      return {
+        success: false,
+        error: `Refusing to save permission-system settings at '${policyPath}': the existing file is corrupt or unparseable. Manual intervention is required to preserve existing permission data.`,
+      };
+    }
 
-  // Resolve the write target (handle symlinks by writing through to the real path).
-  const { writePath } = resolveWriteTarget(configPath);
+    if (hasDuplicateManagedKeys(tree)) {
+      // Pathological last-wins file: textual edits cannot reliably target the
+      // effective value. Fall back to re-serializing the parsed record.
+      const parsed = parseJsoncConfig(text, policyPath, "permission policy file") as Record<string, unknown>;
+      for (const managedKey of MANAGED_SETTINGS_KEYS) {
+        parsed[managedKey] = formatSaveValue(managedKey, normalized);
+      }
+      text = `${JSON.stringify(parsed, null, 2)}\n`;
+      break;
+    }
+
+    const edits = modify(text, [key], formatSaveValue(key, normalized), {
+      formattingOptions: { tabSize: 2, insertSpaces: true },
+    });
+    text = applyEdits(text, edits);
+  }
+
+  const { writePath } = resolveWriteTarget(policyPath);
   const tmpPath = `${writePath}.tmp`;
 
   try {
-    ensureConfigDirectory(writePath);
-    writeFileSync(tmpPath, `${JSON.stringify(merged, null, 2)}\n`, "utf-8");
+    writeFileSync(tmpPath, text, "utf-8");
     renameSync(tmpPath, writePath);
     return { success: true };
   } catch (error) {
@@ -292,10 +281,9 @@ export function savePermissionSystemConfig(
       }
     }
 
-    const message = error instanceof Error ? error.message : String(error);
     return {
       success: false,
-      error: `Failed to save permission-system config at '${configPath}': ${message}`,
+      error: `Failed to save permission-system settings at '${policyPath}': ${error instanceof Error ? error.message : String(error)}`,
     };
   }
 }

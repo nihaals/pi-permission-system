@@ -263,17 +263,17 @@ await runIssue27RedTest("ISSUE27-RED-3: interactive /permission-system invocatio
 await runIssue27RedTest("ISSUE27-RED-4: extension-registered /permission-system command opens without requiring global initTheme", async () => {
   const baseDir = mkdtempSync(join(tmpdir(), "pi-permission-system-issue27-red-"));
   const originalAgentDir = process.env.PI_CODING_AGENT_DIR;
-  const originalConfigPath = process.env.PI_PERMISSION_SYSTEM_CONFIG_PATH;
+  const originalConfigPath = process.env.PI_PERMISSION_SYSTEM_POLICY_AGENT_DIR;
   const originalLogsDir = process.env.PI_PERMISSION_SYSTEM_LOGS_DIR;
 
   try {
-    const configPath = join(baseDir, "extension-config.json");
+    const configPath = join(baseDir, "pi-permissions.jsonc");
     const logsDir = join(baseDir, "logs");
     mkdirSync(logsDir, { recursive: true });
     writeFileSync(configPath, `${JSON.stringify(createConfig(), null, 2)}\n`, "utf8");
 
     process.env.PI_CODING_AGENT_DIR = baseDir;
-    process.env.PI_PERMISSION_SYSTEM_CONFIG_PATH = configPath;
+    process.env.PI_PERMISSION_SYSTEM_POLICY_AGENT_DIR = baseDir;
     process.env.PI_PERMISSION_SYSTEM_LOGS_DIR = logsDir;
 
     const { default: piPermissionSystemExtension } = await import("../src/index.js");
@@ -312,9 +312,9 @@ await runIssue27RedTest("ISSUE27-RED-4: extension-registered /permission-system 
       process.env.PI_CODING_AGENT_DIR = originalAgentDir;
     }
     if (originalConfigPath === undefined) {
-      delete process.env.PI_PERMISSION_SYSTEM_CONFIG_PATH;
+      delete process.env.PI_PERMISSION_SYSTEM_POLICY_AGENT_DIR;
     } else {
-      process.env.PI_PERMISSION_SYSTEM_CONFIG_PATH = originalConfigPath;
+      process.env.PI_PERMISSION_SYSTEM_POLICY_AGENT_DIR = originalConfigPath;
     }
     if (originalLogsDir === undefined) {
       delete process.env.PI_PERMISSION_SYSTEM_LOGS_DIR;

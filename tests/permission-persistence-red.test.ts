@@ -4,7 +4,6 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import {
-  CONFIG_PATH_ENV_KEY,
   DEFAULT_EXTENSION_CONFIG,
   LOGS_DIR_ENV_KEY,
   type PermissionSystemExtensionConfig,
@@ -90,24 +89,18 @@ function createRuntimeHarness(
   const cwd = options.cwd ?? join(baseDir, "workspace");
   const prompts: string[] = [];
   const handlers: Record<string, MockHandler> = {};
-  const extensionConfigPath = join(baseDir, "extension-config.json");
+  const extensionConfig = options.extensionConfig ?? DEFAULT_EXTENSION_CONFIG;
   const logsDir = join(baseDir, "logs");
   const debugPath = join(logsDir, "pi-permission-system-debug.jsonl");
   const originalAgentDir = process.env.PI_CODING_AGENT_DIR;
-  const originalConfigPath = process.env[CONFIG_PATH_ENV_KEY];
   const originalLogsDir = process.env[LOGS_DIR_ENV_KEY];
 
   mkdirSync(join(baseDir, "agents"), { recursive: true });
   mkdirSync(cwd, { recursive: true });
-  writeFileSync(join(baseDir, "pi-permissions.jsonc"), `${JSON.stringify(config, null, 2)}\n`, "utf8");
-  writeFileSync(
-    extensionConfigPath,
-    `${JSON.stringify(options.extensionConfig ?? DEFAULT_EXTENSION_CONFIG, null, 2)}\n`,
-    "utf8",
-  );
+  // Extension settings now live in the same JSONC policy file as permissions.
+  writeFileSync(join(baseDir, "pi-permissions.jsonc"), `${JSON.stringify({ ...config, ...extensionConfig }, null, 2)}\n`, "utf8");
 
   process.env.PI_CODING_AGENT_DIR = baseDir;
-  process.env[CONFIG_PATH_ENV_KEY] = extensionConfigPath;
   process.env[LOGS_DIR_ENV_KEY] = logsDir;
 
   piPermissionSystemExtension({
@@ -135,11 +128,6 @@ function createRuntimeHarness(
         delete process.env.PI_CODING_AGENT_DIR;
       } else {
         process.env.PI_CODING_AGENT_DIR = originalAgentDir;
-      }
-      if (originalConfigPath === undefined) {
-        delete process.env[CONFIG_PATH_ENV_KEY];
-      } else {
-        process.env[CONFIG_PATH_ENV_KEY] = originalConfigPath;
       }
       if (originalLogsDir === undefined) {
         delete process.env[LOGS_DIR_ENV_KEY];
@@ -379,7 +367,7 @@ const tests: IssueTest[] = [
   },
   {
     name: "configured deny overrides an existing Allow Always session approval",
-    kind: "red",
+    kind: "regression",
     scenario: "After an explicit Allow Always exists, a later configured deny for the same subject must remain a hard boundary.",
     fn: async () => {
       const harness = createRuntimeHarness(
@@ -425,7 +413,7 @@ const tests: IssueTest[] = [
   },
   {
     name: "YOLO auto-response does not save a session approval after it is disabled",
-    kind: "red",
+    kind: "regression",
     scenario: "Explicit auto-response should approve while enabled but must not mutate the Allow Always/session approval store.",
     fn: async () => {
       const harness = createRuntimeHarness(
@@ -445,8 +433,8 @@ const tests: IssueTest[] = [
         assert.equal(harness.prompts.length, 0);
 
         writeFileSync(
-          join(harness.baseDir, "extension-config.json"),
-          `${JSON.stringify({ ...DEFAULT_EXTENSION_CONFIG, yoloMode: false }, null, 2)}\n`,
+          join(harness.baseDir, "pi-permissions.jsonc"),
+          `${JSON.stringify({ defaultPolicy: ASK_BASH_POLICY, ...DEFAULT_EXTENSION_CONFIG, yoloMode: false }, null, 2)}\n`,
           "utf8",
         );
         await runLifecycle(harness, "resources_discover", { reason: "reload" });
@@ -466,7 +454,7 @@ const tests: IssueTest[] = [
   },
   {
     name: "debug events distinguish once, always, reject, auto-response, and policy deny paths",
-    kind: "red",
+    kind: "regression",
     scenario: "Permission review logs must expose enough resolution detail to audit repeated-decision states separately.",
     fn: async () => {
       const harness = createRuntimeHarness(
@@ -506,8 +494,8 @@ const tests: IssueTest[] = [
         );
 
         writeFileSync(
-          join(harness.baseDir, "extension-config.json"),
-          `${JSON.stringify({ ...DEFAULT_EXTENSION_CONFIG, debug: true, yoloMode: true }, null, 2)}\n`,
+          join(harness.baseDir, "pi-permissions.jsonc"),
+          `${JSON.stringify({ defaultPolicy: ASK_BASH_POLICY, ...DEFAULT_EXTENSION_CONFIG, debug: true, yoloMode: true }, null, 2)}\n`,
           "utf8",
         );
         await runLifecycle(harness, "resources_discover", { reason: "reload" });
@@ -524,8 +512,8 @@ const tests: IssueTest[] = [
           "utf8",
         );
         writeFileSync(
-          join(harness.baseDir, "extension-config.json"),
-          `${JSON.stringify({ ...DEFAULT_EXTENSION_CONFIG, debug: true, yoloMode: false }, null, 2)}\n`,
+          join(harness.baseDir, "pi-permissions.jsonc"),
+          `${JSON.stringify({ defaultPolicy: ASK_BASH_POLICY, ...DEFAULT_EXTENSION_CONFIG, debug: true, yoloMode: false }, null, 2)}\n`,
           "utf8",
         );
         await runLifecycle(harness, "resources_discover", { reason: "reload" });
