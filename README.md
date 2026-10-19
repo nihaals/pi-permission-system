@@ -203,7 +203,7 @@ Extension settings live as top-level keys of the **Global Policy File** above (`
 | `forwardedPromptTimeoutSeconds` | `30` | Seconds before an unanswered forwarded subagent permission prompt auto-denies. `null` (or `false`) waits indefinitely. |
 | `escapeAction` | `reject` | Behavior when `esc` is pressed at a permission prompt. `reject` denies immediately with no reason; `reject_with_reason` opens the rejection-reason input so a denial reason can be attached; `stop_and_steer` opens the steering-guidance input so a note can be attached without rejecting the call (an empty note pauses the run so the user can reply directly). |
 
-All of these keys (except `enabled`) can be inspected or changed interactively via `/permission-system`; saves preserve JSONC comments, formatting, and all other keys.
+All of these keys (except `enabled`) can be inspected or changed interactively via `/permission-system`; saves preserve JSONC comments, formatting, and all other keys. Settings keys are never inserted when they hold their default value: the file only ever contains settings that differ from the defaults (existing keys—including default-valued ones—are updated in place, never removed).
 
 Debug output writes only under the extension directory by default. Set `PI_PERMISSION_SYSTEM_LOGS_DIR` to redirect the debug file to a specific directory. No debug output is printed to the terminal.
 

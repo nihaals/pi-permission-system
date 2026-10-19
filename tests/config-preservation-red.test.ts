@@ -610,11 +610,11 @@ const tests: IssueTest[] = [
   // =========================================================================
 
   {
-    name: "savePermissionSystemConfig adds extension fields to a permissions-only config without destroying permissions",
+    name: "savePermissionSystemConfig only adds non-default extension fields to a permissions-only config without destroying permissions",
     kind: "red",
     scenario:
-      "If the config file only contains permission fields (no debug/yoloMode/timeout), saving must add "
-      + "the extension fields while preserving all permission data.",
+      "If the config file only contains permission fields (no debug/yoloMode/timeout), saving must insert "
+      + "only settings whose value differs from the default while preserving all permission data.",
     fn: () => {
       const permissionsOnlyConfig = {
         defaultPolicy: ISSUE_CONFIG_WITH_PERMISSIONS.defaultPolicy,
@@ -641,10 +641,10 @@ const tests: IssueTest[] = [
 
         const raw = readRawConfig(configPath);
 
-        // Extension fields should now be present.
+        // A non-default setting is inserted; default-valued ones are not.
         assert.equal(raw.debug, true);
-        assert.equal(raw.yoloMode, false);
-        assert.equal(raw.forwardedPromptTimeoutSeconds, 30);
+        assert.ok(!Object.prototype.hasOwnProperty.call(raw, "yoloMode"), "default yoloMode must not be inserted");
+        assert.ok(!Object.prototype.hasOwnProperty.call(raw, "forwardedPromptTimeoutSeconds"), "default timeout must not be inserted");
 
         // Permission fields must be preserved.
         for (const key of PERMISSION_KEYS) {
@@ -853,10 +853,11 @@ const tests: IssueTest[] = [
   // =========================================================================
 
   {
-    name: "savePermissionSystemConfig on an empty object config preserves no extra fields but writes extension defaults",
+    name: "savePermissionSystemConfig on an empty object config only inserts non-default extension settings",
     kind: "regression",
     scenario:
-      "If the config file is an empty JSON object, saving should write the extension fields without error.",
+      "If the config file is an empty JSON object, saving must insert only settings whose value differs "
+      + "from the default; default-valued settings must never be added to the file.",
     fn: () => {
       const { configPath, cleanup } = createIsolatedConfigDir("{}\n");
 
@@ -870,8 +871,100 @@ const tests: IssueTest[] = [
 
         const raw = readRawConfig(configPath);
         assert.equal(raw.debug, true);
-        assert.equal(raw.yoloMode, false);
-        assert.equal(raw.forwardedPromptTimeoutSeconds, 30);
+        assert.ok(!Object.prototype.hasOwnProperty.call(raw, "yoloMode"), "default yoloMode must not be inserted");
+        assert.ok(!Object.prototype.hasOwnProperty.call(raw, "forwardedPromptTimeoutSeconds"), "default timeout must not be inserted");
+        assert.ok(!Object.prototype.hasOwnProperty.call(raw, "escapeAction"), "default escapeAction must not be inserted");
+      } finally {
+        cleanup();
+      }
+    },
+  },
+
+  {
+    name: "savePermissionSystemConfig with only default values never adds extension keys to an existing config",
+    kind: "regression",
+    scenario:
+      "Saving a config whose managed values are all defaults into a permissions-only file must leave "
+      + "the extension settings untouched (no default-valued keys inserted).",
+    fn: () => {
+      const { configPath, cleanup } = createIsolatedConfigDir(
+        `${JSON.stringify(
+          { defaultPolicy: ISSUE_CONFIG_WITH_PERMISSIONS.defaultPolicy, tools: { read: "allow" } },
+          null,
+          2,
+        )}\n`,
+      );
+
+      try {
+        const before = readRawConfigText(configPath);
+        const loaded = loadPermissionSystemConfig(configPath);
+        const saved = savePermissionSystemConfig(loaded.config, configPath);
+        assert.equal(saved.success, true);
+
+        assert.equal(readRawConfigText(configPath), before);
+        const raw = readRawConfig(configPath);
+        assert.ok(!Object.prototype.hasOwnProperty.call(raw, "debug"), "default debug must not be inserted");
+        assert.ok(!Object.prototype.hasOwnProperty.call(raw, "yoloMode"), "default yoloMode must not be inserted");
+        assert.ok(!Object.prototype.hasOwnProperty.call(raw, "forwardedPromptTimeoutSeconds"), "default timeout must not be inserted");
+        assert.ok(!Object.prototype.hasOwnProperty.call(raw, "escapeAction"), "default escapeAction must not be inserted");
+      } finally {
+        cleanup();
+      }
+    },
+  },
+
+  {
+    name: "savePermissionSystemConfig with a missing file and only default values writes nothing",
+    kind: "regression",
+    scenario:
+      "When the policy file does not exist and all managed settings are defaults, saving must not "
+      + "create the file (a missing file already means defaults).",
+    fn: () => {
+      const { configPath, cleanup } = createIsolatedConfigDir();
+
+      try {
+        const saved = savePermissionSystemConfig({ ...DEFAULT_EXTENSION_CONFIG }, configPath);
+        assert.equal(saved.success, true);
+        assert.ok(!existsSync(configPath), "no file should be created when nothing non-default is persisted");
+
+        // A non-default value does create the file, with only that key.
+        const saved2 = savePermissionSystemConfig({ ...DEFAULT_EXTENSION_CONFIG, escapeAction: "stop_and_steer" }, configPath);
+        assert.equal(saved2.success, true);
+        const raw = readRawConfig(configPath);
+        assert.equal(raw.escapeAction, "stop_and_steer");
+        assert.ok(!Object.prototype.hasOwnProperty.call(raw, "debug"));
+        assert.ok(!Object.prototype.hasOwnProperty.call(raw, "yoloMode"));
+        assert.ok(!Object.prototype.hasOwnProperty.call(raw, "forwardedPromptTimeoutSeconds"));
+      } finally {
+        cleanup();
+      }
+    },
+  },
+
+  {
+    name: "savePermissionSystemConfig keeps explicit default-valued keys that already exist",
+    kind: "regression",
+    scenario:
+      "A key present in the file is always updated in place, even at its default value; writes must "
+      + "never remove settings the user (or a previous save) made explicit.",
+    fn: () => {
+      const { configPath, cleanup } = createIsolatedConfigDir(
+        `${JSON.stringify(
+          { defaultPolicy: ISSUE_CONFIG_WITH_PERMISSIONS.defaultPolicy, tools: { read: "allow" }, debug: false },
+          null,
+          2,
+        )}\n`,
+      );
+
+      try {
+        const loaded = loadPermissionSystemConfig(configPath);
+        const saved = savePermissionSystemConfig(loaded.config, configPath);
+        assert.equal(saved.success, true);
+
+        const raw = readRawConfig(configPath);
+        assert.ok(Object.prototype.hasOwnProperty.call(raw, "debug"), "explicit debug key must not be removed");
+        assert.equal(raw.debug, false);
+        assert.ok(!Object.prototype.hasOwnProperty.call(raw, "yoloMode"));
       } finally {
         cleanup();
       }
@@ -1514,11 +1607,11 @@ const tests: IssueTest[] = [
   // =========================================================================
 
   {
-    name: "savePermissionSystemConfig adds missing extension fields to a partial extension config while preserving permissions",
+    name: "savePermissionSystemConfig keeps a partial extension config partial (no default insertion) while preserving permissions",
     kind: "red",
     scenario:
-      "If the config has debug:true but no yoloMode or forwardedPromptTimeoutSeconds, saving must add the missing "
-      + "extension defaults while preserving debug and all permission fields.",
+      "If the config has debug:true but no yoloMode or forwardedPromptTimeoutSeconds, saving must update the "
+      + "present key in place, never insert default-valued keys, and preserve all permission fields.",
     fn: () => {
       const partialExtensionConfig = {
         defaultPolicy: ISSUE_CONFIG_WITH_PERMISSIONS.defaultPolicy,
@@ -1550,8 +1643,8 @@ const tests: IssueTest[] = [
 
         const raw = readRawConfig(configPath);
         assert.equal(raw.debug, false, "debug should be updated to false");
-        assert.equal(raw.yoloMode, false, "yoloMode should be present as default");
-        assert.equal(raw.forwardedPromptTimeoutSeconds, 30, "timeout should be present as default");
+        assert.ok(!Object.prototype.hasOwnProperty.call(raw, "yoloMode"), "default yoloMode must not be inserted");
+        assert.ok(!Object.prototype.hasOwnProperty.call(raw, "forwardedPromptTimeoutSeconds"), "default timeout must not be inserted");
 
         for (const key of PERMISSION_KEYS) {
           assert.ok(

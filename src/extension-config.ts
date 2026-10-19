@@ -151,6 +151,23 @@ function formatSaveValue(key: (typeof MANAGED_SETTINGS_KEYS)[number], config: Pe
   }
 }
 
+/** True when the key's save value equals its documented default. */
+function isDefaultManagedValue(key: (typeof MANAGED_SETTINGS_KEYS)[number], config: PermissionSystemExtensionConfig): boolean {
+  return formatSaveValue(key, config) === DEFAULT_EXTENSION_CONFIG[key];
+}
+
+/** True when the root-level object contains the given top-level key. */
+function treeHasRootKey(tree: NonNullable<ReturnType<typeof parseTree>>, key: string): boolean {
+  for (const property of tree.children ?? []) {
+    const keyNode = (property.children ?? [])[0];
+    const name = typeof keyNode?.value === "string" ? keyNode.value : "";
+    if (name === key) {
+      return true;
+    }
+  }
+  return false;
+}
+
 /**
  * Resolves the actual write target. If configPath is a symlink, returns the
  * realpath so that the symlink relationship is preserved (we write through to
@@ -198,11 +215,20 @@ function hasDuplicateManagedKeys(tree: NonNullable<ReturnType<typeof parseTree>>
  * that comments, formatting, and all other keys (permissions, custom keys) are
  * preserved verbatim.
  *
- * - If the file does not exist, it is created with the managed settings only.
+ * - Keys that already exist in the file are updated in place with the current
+ *   value, never removed (an explicit setting from a previous save or from a
+ *   hand edit survives).
+ * - Keys that do not exist are only inserted when the value differs from the
+ *   default; default-valued settings are never added, so the file only ever
+ *   contains settings the user (or a previous write) actually chose.
+ * - If the file does not exist, it is created only when at least one managed
+ *   setting is non-default; otherwise nothing is written (a missing file means
+ *   defaults).
  * - If the file cannot be parsed, saving is refused so existing permission data
  *   is never destroyed.
  * - Files with duplicate settings keys (last-wins in JSONC) cannot be edited
- *   textually; they fall back to a clean re-serialization of the parsed record.
+ *   textually; they fall back to a clean re-serialization of the parsed record
+ *   (same insert rule: only non-default values are materialized).
  */
 export function savePermissionSystemConfig(
   config: PermissionSystemExtensionConfig,
@@ -223,8 +249,16 @@ export function savePermissionSystemConfig(
     // Strip a UTF-8 BOM if present so the JSONC parser can handle the content.
     text = text.charCodeAt(0) === 0xfeff ? text.slice(1) : text;
   } else {
+    if (MANAGED_SETTINGS_KEYS.every((key) => isDefaultManagedValue(key, normalized))) {
+      // Nothing non-default to persist: a missing file already means defaults.
+      return { success: true };
+    }
     text = `${JSON.stringify(
-      Object.fromEntries(MANAGED_SETTINGS_KEYS.map((key) => [key, formatSaveValue(key, normalized)])),
+      Object.fromEntries(
+        MANAGED_SETTINGS_KEYS
+          .filter((key) => !isDefaultManagedValue(key, normalized))
+          .map((key) => [key, formatSaveValue(key, normalized)]),
+      ),
       null,
       2,
     )}\n`;
@@ -244,13 +278,26 @@ export function savePermissionSystemConfig(
 
     if (hasDuplicateManagedKeys(tree)) {
       // Pathological last-wins file: textual edits cannot reliably target the
-      // effective value. Fall back to re-serializing the parsed record.
+      // effective value. Fall back to re-serializing the parsed record. The
+      // same insert rule applies: only non-default values are materialized
+      // (existing keys keep their parsed value).
       const parsed = parseJsoncConfig(text, policyPath, "permission policy file") as Record<string, unknown>;
       for (const managedKey of MANAGED_SETTINGS_KEYS) {
-        parsed[managedKey] = formatSaveValue(managedKey, normalized);
+        if (!isDefaultManagedValue(managedKey, normalized)) {
+          parsed[managedKey] = formatSaveValue(managedKey, normalized);
+        } else if (Object.prototype.hasOwnProperty.call(parsed, managedKey)) {
+          // Present keys are updated in place even when default-valued.
+          parsed[managedKey] = formatSaveValue(managedKey, normalized);
+        }
       }
       text = `${JSON.stringify(parsed, null, 2)}\n`;
       break;
+    }
+
+    if (!treeHasRootKey(tree, key) && isDefaultManagedValue(key, normalized)) {
+      // Never insert default-valued settings keys; a key the user explicitly
+      // wrote is still updated in place.
+      continue;
     }
 
     const edits = modify(text, [key], formatSaveValue(key, normalized), {
