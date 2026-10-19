@@ -166,7 +166,7 @@ All permissions use one of three states:
 | `deny`  | Blocks the action with an error message     |
 | `ask`   | Prompts the user for confirmation via UI    |
 
-When an `ask` permission prompts, the confirmation UI offers `Allow Once`, `Allow Always`, `Reject`, and `Reject with Reason`. `Allow Once` approves only the current request. `Allow Always` records an explicit matching approval for the current session only (in-memory, not persisted to disk), while plain `Reject` and `Reject with Reason` deny only the current request and do not silently become future defaults. YOLO/auto-response approvals also do not create saved approval rules; after YOLO mode is disabled, matching `ask` requests require approval again. A configured `deny` remains a hard boundary and is not relaxed by prior one-shot, auto-response, or saved approvals.
+When an `ask` permission prompts, the confirmation UI offers `Allow once`, `Allow always`, `Reject`, `Reject with reason`, and `Stop and steer`. `Allow once` approves only the current request. `Allow always` records an explicit matching approval for the current session only (in-memory, not persisted to disk). Plain `Reject` and `Reject with reason` deny only the current request and do not silently become future defaults. `Stop and steer` does not run the call: with a note it blocks the call with soft steering wording the agent must read and act on; with an empty note it pauses the run (like `esc` mid-turn) so the user can reply directly. YOLO/auto-response approvals also do not create saved approval rules; after YOLO mode is disabled, matching `ask` requests require approval again. A configured `deny` remains a hard boundary and is not relaxed by prior one-shot, auto-response, or saved approvals.
 
 ### Pi Integration Hooks
 
@@ -201,7 +201,7 @@ Extension settings live as top-level keys of the **Global Policy File** above (`
 | `debug` | `false` | Enables verbose diagnostics and permission review entries in the extension debug log (under the extension install directory; set `PI_PERMISSION_SYSTEM_LOGS_DIR` to redirect) |
 | `yoloMode` | `false` | Auto-approves `ask` results instead of prompting when yolo mode is enabled |
 | `forwardedPromptTimeoutSeconds` | `30` | Seconds before an unanswered forwarded subagent permission prompt auto-denies. `null` (or `false`) waits indefinitely. |
-| `escapeAction` | `reject` | Behavior when `esc` is pressed at a permission prompt. `reject` denies immediately with no reason; `reject_with_reason` opens the rejection-reason input so a denial reason can be attached. |
+| `escapeAction` | `reject` | Behavior when `esc` is pressed at a permission prompt. `reject` denies immediately with no reason; `reject_with_reason` opens the rejection-reason input so a denial reason can be attached; `stop_and_steer` opens the steering-guidance input so a note can be attached without rejecting the call (an empty note pauses the run so the user can reply directly). |
 
 All of these keys (except `enabled`) can be inspected or changed interactively via `/permission-system`; saves preserve JSONC comments, formatting, and all other keys.
 

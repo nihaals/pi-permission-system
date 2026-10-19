@@ -19,7 +19,7 @@ import {
 import { runAsyncTest } from "./test-harness.js";
 
 // Issue #29 RED coverage: the same edit request can be emitted twice in a row.
-// Desired behavior: an "Allow Once" decision is reused for the same request id,
+// Desired behavior: an "Allow once" decision is reused for the same request id,
 // while a new request id for identical edit content still requires its own approval.
 // Not covered here: malformed edit payload validation, because this regression is
 // about duplicate permission prompts for valid edit tool calls.
@@ -97,7 +97,7 @@ function createMockContext(
       setStatus: (): void => {},
       select: async (title: string): Promise<string | undefined> => {
         harness.prompts.push(title);
-        return options.selectResponse ?? harness.selectResponses.shift() ?? "Allow Once";
+        return options.selectResponse ?? harness.selectResponses.shift() ?? "Allow once";
       },
       input: async (): Promise<string | undefined> => undefined,
     },
@@ -191,8 +191,8 @@ async function runToolCall(
   return (result ?? {}) as Record<string, unknown>;
 }
 
-await runAsyncTest("ISSUE29: duplicate edit tool_call with the same request id reuses the Allow Once decision", async () => {
-  const harness = createToolCallHarness(["Allow Once", "Reject"]);
+await runAsyncTest("ISSUE29: duplicate edit tool_call with the same request id reuses the Allow once decision", async () => {
+  const harness = createToolCallHarness(["Allow once", "Reject"]);
 
   try {
     await runSessionStart(harness);
@@ -219,7 +219,7 @@ await runAsyncTest("ISSUE29: duplicate edit tool_call with the same request id r
 });
 
 await runAsyncTest("ISSUE29: identical edit content with a new request id remains a separate approval", async () => {
-  const harness = createToolCallHarness(["Allow Once"]);
+  const harness = createToolCallHarness(["Allow once"]);
 
   try {
     await runSessionStart(harness);
@@ -238,7 +238,7 @@ await runAsyncTest("ISSUE29: identical edit content with a new request id remain
     assert.equal(
       harness.prompts.length,
       1,
-      "Allow Once must not persist by file path or edit content for a later request id",
+      "Allow once must not persist by file path or edit content for a later request id",
     );
   } finally {
     await harness.cleanup();

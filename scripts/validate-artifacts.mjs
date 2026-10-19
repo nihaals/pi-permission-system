@@ -58,8 +58,8 @@ for (const key of ["enabled", "debug", "yoloMode", "forwardedPromptTimeoutSecond
   assert(Object.prototype.hasOwnProperty.call(schema?.properties ?? {}, key), `schema must expose top-level '${key}'`);
 }
 assert(
-  JSON.stringify(schema.properties.escapeAction.enum) === JSON.stringify(["reject", "reject_with_reason"]),
-  "schema escapeAction must accept reject and reject_with_reason",
+  JSON.stringify(schema.properties.escapeAction.enum) === JSON.stringify(["reject", "reject_with_reason", "stop_and_steer"]),
+  "schema escapeAction must accept reject, reject_with_reason, and steer",
 );
 
 validatePolicyExample(policyExample);

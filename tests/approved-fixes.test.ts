@@ -232,7 +232,7 @@ await runAsyncTest("forwarded permission responses cannot escape the responses d
 
     setExtensionConfig({ ...DEFAULT_EXTENSION_CONFIG, debug: false });
     await processForwardedPermissionRequests(
-      createMockContext(baseDir, prompts, { sessionId, hasUI: true, selectResponse: "Allow Once" }) as never,
+      createMockContext(baseDir, prompts, { sessionId, hasUI: true, selectResponse: "Allow once" }) as never,
       { preserveLocation: true },
     );
 
@@ -248,7 +248,7 @@ await runAsyncTest("forwarded permission responses cannot escape the responses d
   }
 });
 
-await runAsyncTest("Allow Always records a session-only approval and writes no persistent file", async () => {
+await runAsyncTest("Allow always records a session-only approval and writes no persistent file", async () => {
   const harness = createHarness();
   const approvalsPath = join(harness.baseDir, "pi-permission-system-approvals.json");
 
@@ -261,11 +261,11 @@ await runAsyncTest("Allow Always records a session-only approval and writes no p
         toolCallId: "approved-fixes-always-first",
         input: { command: "git status --short" },
       },
-      { hasUI: true, selectResponse: "Allow Always" },
+      { hasUI: true, selectResponse: "Allow always" },
     );
 
     assert.deepEqual(first, {});
-    assert.equal(existsSync(approvalsPath), false, "Allow Always must not persist a permanent approval file");
+    assert.equal(existsSync(approvalsPath), false, "Allow always must not persist a permanent approval file");
 
     // A repeat identical call within the same session should be auto-approved by the session store.
     const second = await runToolCall(
@@ -275,7 +275,7 @@ await runAsyncTest("Allow Always records a session-only approval and writes no p
         toolCallId: "approved-fixes-always-second",
         input: { command: "git status --short" },
       },
-      { hasUI: true, selectResponse: "Allow Always" },
+      { hasUI: true, selectResponse: "Allow always" },
     );
     assert.deepEqual(second, {}, "Session approval should auto-allow the repeated command without a new prompt");
   } finally {

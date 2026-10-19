@@ -42,7 +42,7 @@ function buildSettingItems(config: PermissionSystemExtensionConfig): SettingItem
     {
       id: "escapeAction",
       label: "Prompt escape action",
-      description: "Behavior when Esc is pressed at a permission prompt: reject immediately (reject) or ask for a rejection reason (reject_with_reason)",
+      description: "Behavior when Esc is pressed at a permission prompt: reject immediately (reject), ask for a rejection reason (reject_with_reason), or ask for steering guidance (stop_and_steer)",
       currentValue: config.escapeAction ?? DEFAULT_ESCAPE_ACTION,
       values: [...PERMISSION_ESCAPE_ACTIONS],
     },

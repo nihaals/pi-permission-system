@@ -1,11 +1,12 @@
 import { getNonEmptyString } from "./common.js";
 
-export type PermissionDecisionState = "approved" | "denied" | "denied_with_reason" | "once" | "always" | "reject";
+export type PermissionDecisionState = "approved" | "denied" | "denied_with_reason" | "once" | "always" | "reject" | "steer";
 
 export type PermissionPromptDecision = {
   approved: boolean;
   state: PermissionDecisionState;
   denialReason?: string;
+  steerMessage?: string;
 };
 
 export interface PermissionDecisionUiSelectOptions {
@@ -23,27 +24,29 @@ export type PermissionDecisionRequestOptions = {
   escapeAction?: PermissionEscapeAction;
 };
 
-export const PERMISSION_ESCAPE_ACTIONS = ["reject", "reject_with_reason"] as const;
+export const PERMISSION_ESCAPE_ACTIONS = ["reject", "reject_with_reason", "stop_and_steer"] as const;
 
 export type PermissionEscapeAction = (typeof PERMISSION_ESCAPE_ACTIONS)[number];
 
 export function isPermissionEscapeAction(value: unknown): value is PermissionEscapeAction {
-  return value === "reject" || value === "reject_with_reason";
+  return value === "reject" || value === "reject_with_reason" || value === "stop_and_steer";
 }
 
 export function normalizePermissionEscapeAction(value: unknown): PermissionEscapeAction {
-  return value === "reject_with_reason" ? "reject_with_reason" : "reject";
+  return isPermissionEscapeAction(value) ? value : "reject";
 }
 
-const APPROVE_ONCE_OPTION = "Allow Once";
-const APPROVE_ALWAYS_OPTION = "Allow Always";
+const APPROVE_ONCE_OPTION = "Allow once";
+const APPROVE_ALWAYS_OPTION = "Allow always";
 const REJECT_OPTION = "Reject";
-const REJECT_WITH_REASON_OPTION = "Reject with Reason";
+const REJECT_WITH_REASON_OPTION = "Reject with reason";
+const STEER_OPTION = "Stop and steer";
 const PERMISSION_DECISION_OPTIONS = [
   APPROVE_ONCE_OPTION,
   APPROVE_ALWAYS_OPTION,
   REJECT_OPTION,
   REJECT_WITH_REASON_OPTION,
+  STEER_OPTION,
 ] as const;
 const PERMISSION_DIALOG_MAX_VISIBLE_LINES = 32;
 const PERMISSION_DIALOG_MAX_VISIBLE_CHARACTERS = 2_200;
@@ -118,7 +121,26 @@ export function isPermissionDecisionState(
     || value === "denied_with_reason"
     || value === "once"
     || value === "always"
-    || value === "reject";
+    || value === "reject"
+    || value === "steer";
+}
+
+export function createSteerPermissionDecision(steerMessage?: string): PermissionPromptDecision {
+  const normalizedMessage = normalizePermissionDenialReason(steerMessage);
+  return normalizedMessage
+    ? { approved: false, state: "steer", steerMessage: normalizedMessage }
+    : { approved: false, state: "steer" };
+}
+
+async function promptForSteering(ui: PermissionDecisionUi, title: string): Promise<PermissionPromptDecision> {
+  const steerMessage = normalizePermissionDenialReason(
+    await ui.input(
+      `${title}\nThis call will not run — the agent must re-issue it after reading your note.\nShare guidance (leave empty to pause and reply yourself).`,
+      "Guidance shown to the agent",
+    ),
+  );
+
+  return createSteerPermissionDecision(steerMessage);
 }
 
 async function promptForRejection(ui: PermissionDecisionUi, title: string): Promise<PermissionPromptDecision> {
@@ -167,8 +189,16 @@ export async function requestPermissionDecisionFromUi(
     return promptForRejection(ui, title);
   }
 
+  if (selected === STEER_OPTION) {
+    return promptForSteering(ui, title);
+  }
+
   if (selected === undefined && options.escapeAction === "reject_with_reason") {
     return promptForRejection(ui, title);
+  }
+
+  if (selected === undefined && options.escapeAction === "stop_and_steer") {
+    return promptForSteering(ui, title);
   }
 
   return options.timeoutDenialReason

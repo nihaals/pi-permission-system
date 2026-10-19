@@ -174,7 +174,7 @@ function readDebugLogLines(debugPath: string): Array<Record<string, unknown>> {
 
 const tests: IssueTest[] = [
   {
-    name: "Allow Once is one-shot and does not become the next default",
+    name: "Allow once is one-shot and does not become the next default",
     kind: "regression",
     scenario: "An ordinary one-shot approval must not silently persist for a later identical request.",
     fn: async () => {
@@ -192,7 +192,7 @@ const tests: IssueTest[] = [
             toolCallId: "issue-26-allow-once-first",
             input: { command: "git status --short" },
           },
-          { hasUI: true, selectResponse: "Allow Once" },
+          { hasUI: true, selectResponse: "Allow once" },
         );
         assert.deepEqual(first, {});
 
@@ -241,7 +241,7 @@ const tests: IssueTest[] = [
             toolCallId: "issue-26-reject-second",
             input: { command: "git status --short" },
           },
-          { hasUI: true, selectResponse: "Allow Once" },
+          { hasUI: true, selectResponse: "Allow once" },
         );
 
         assert.deepEqual(approvedLater, {});
@@ -252,9 +252,9 @@ const tests: IssueTest[] = [
     },
   },
   {
-    name: "Reject with Reason does not persist as a future default deny",
+    name: "Reject with reason does not persist as a future default deny",
     kind: "regression",
-    scenario: "Reject with Reason returns feedback for the current request but must not save a future matching denial.",
+    scenario: "Reject with reason returns feedback for the current request but must not save a future matching denial.",
     fn: async () => {
       const harness = createRuntimeHarness(
         { defaultPolicy: ASK_BASH_POLICY },
@@ -270,7 +270,7 @@ const tests: IssueTest[] = [
             toolCallId: "issue-26-reject-reason-first",
             input: { command: "git status --short" },
           },
-          { hasUI: true, selectResponse: "Reject with Reason", inputResponse: "Use read-only inspection instead" },
+          { hasUI: true, selectResponse: "Reject with reason", inputResponse: "Use read-only inspection instead" },
         );
         assert.equal(rejected.block, true);
         assert.match(String(rejected.reason), /Reason: Use read-only inspection instead\./);
@@ -282,7 +282,7 @@ const tests: IssueTest[] = [
             toolCallId: "issue-26-reject-reason-second",
             input: { command: "git status --short" },
           },
-          { hasUI: true, selectResponse: "Allow Once" },
+          { hasUI: true, selectResponse: "Allow once" },
         );
 
         assert.deepEqual(approvedLater, {});
@@ -293,9 +293,9 @@ const tests: IssueTest[] = [
     },
   },
   {
-    name: "Allow Always persists the explicitly matching request subject",
+    name: "Allow always persists the explicitly matching request subject",
     kind: "regression",
-    scenario: "An explicit Allow Always should approve a later identical command in the same session without prompting.",
+    scenario: "An explicit Allow always should approve a later identical command in the same session without prompting.",
     fn: async () => {
       const harness = createRuntimeHarness(
         { defaultPolicy: ASK_BASH_POLICY },
@@ -311,7 +311,7 @@ const tests: IssueTest[] = [
             toolCallId: "issue-26-always-first",
             input: { command: "git status --short" },
           },
-          { hasUI: true, selectResponse: "Allow Always" },
+          { hasUI: true, selectResponse: "Allow always" },
         );
         assert.deepEqual(first, {});
 
@@ -329,9 +329,9 @@ const tests: IssueTest[] = [
     },
   },
   {
-    name: "Allow Always does not broaden to a different command subject",
+    name: "Allow always does not broaden to a different command subject",
     kind: "regression",
-    scenario: "A saved Allow Always for one command must not become an implicit wildcard for unrelated bash commands.",
+    scenario: "A saved Allow always for one command must not become an implicit wildcard for unrelated bash commands.",
     fn: async () => {
       const harness = createRuntimeHarness(
         { defaultPolicy: ASK_BASH_POLICY },
@@ -347,7 +347,7 @@ const tests: IssueTest[] = [
             toolCallId: "issue-26-always-scope-first",
             input: { command: "git status --short" },
           },
-          { hasUI: true, selectResponse: "Allow Always" },
+          { hasUI: true, selectResponse: "Allow always" },
         );
         assert.deepEqual(approved, {});
 
@@ -366,9 +366,9 @@ const tests: IssueTest[] = [
     },
   },
   {
-    name: "configured deny overrides an existing Allow Always session approval",
+    name: "configured deny overrides an existing Allow always session approval",
     kind: "regression",
-    scenario: "After an explicit Allow Always exists, a later configured deny for the same subject must remain a hard boundary.",
+    scenario: "After an explicit Allow always exists, a later configured deny for the same subject must remain a hard boundary.",
     fn: async () => {
       const harness = createRuntimeHarness(
         { defaultPolicy: ASK_BASH_POLICY },
@@ -385,7 +385,7 @@ const tests: IssueTest[] = [
             toolCallId: "issue-26-deny-overrides-first",
             input: { command: "git status --short" },
           },
-          { hasUI: true, selectResponse: "Allow Always" },
+          { hasUI: true, selectResponse: "Allow always" },
         );
         assert.deepEqual(first, {});
 
@@ -414,7 +414,7 @@ const tests: IssueTest[] = [
   {
     name: "YOLO auto-response does not save a session approval after it is disabled",
     kind: "regression",
-    scenario: "Explicit auto-response should approve while enabled but must not mutate the Allow Always/session approval store.",
+    scenario: "Explicit auto-response should approve while enabled but must not mutate the Allow always/session approval store.",
     fn: async () => {
       const harness = createRuntimeHarness(
         { defaultPolicy: ASK_BASH_POLICY },
@@ -472,7 +472,7 @@ const tests: IssueTest[] = [
             toolCallId: "issue-26-audit-once",
             input: { command: "echo once" },
           },
-          { hasUI: true, selectResponse: "Allow Once" },
+          { hasUI: true, selectResponse: "Allow once" },
         );
         await runToolCall(
           harness,
@@ -481,7 +481,7 @@ const tests: IssueTest[] = [
             toolCallId: "issue-26-audit-always",
             input: { command: "echo always" },
           },
-          { hasUI: true, selectResponse: "Allow Always" },
+          { hasUI: true, selectResponse: "Allow always" },
         );
         await runToolCall(
           harness,
@@ -537,8 +537,8 @@ const tests: IssueTest[] = [
         const persistedApprovalEvents = logEntries.filter((entry) => entry.event === "permission_request.approval_persisted");
         const repeatedDecisionFields = ["decisionPersistence", "approvalPersistence", "decisionScope", "approvalScope"];
 
-        assert.ok(approvedResolutions.includes("once"), "Allow Once approvals should log resolution 'once'");
-        assert.ok(approvedResolutions.includes("always"), "Allow Always approvals should log resolution 'always'");
+        assert.ok(approvedResolutions.includes("once"), "Allow once approvals should log resolution 'once'");
+        assert.ok(approvedResolutions.includes("always"), "Allow always approvals should log resolution 'always'");
         assert.ok(deniedResolutions.includes("reject"), "Plain rejects should log resolution 'reject'");
         assert.ok(
           autoEvents.some((entry) => entry.toolCallId === "issue-26-audit-auto"),
@@ -550,7 +550,7 @@ const tests: IssueTest[] = [
         );
         assert.ok(
           persistedApprovalEvents.some((entry) => entry.toolCallId === "issue-26-audit-always"),
-          "Allow Always should emit an auditable persistence event",
+          "Allow always should emit an auditable persistence event",
         );
         assert.ok(
           logEntries.some((entry) => repeatedDecisionFields.some((field) => Object.hasOwn(entry, field))),

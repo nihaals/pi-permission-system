@@ -62,6 +62,7 @@ import {
   formatToolInputForPrompt,
   formatUnknownToolReason,
   formatUserDeniedReason,
+  formatUserSteerReason,
   getStructuredEditPayloads,
   hasStructuredEditPayload,
 } from "./permission-prompts.js";
@@ -380,16 +381,17 @@ function createSensitiveLogMetadata(value: string | undefined): SensitiveLogMeta
 }
 
 function clonePermissionPromptDecision(decision: PermissionPromptDecision): PermissionPromptDecision {
-  return decision.denialReason === undefined
-    ? {
-      approved: decision.approved,
-      state: decision.state,
-    }
-    : {
-      approved: decision.approved,
-      state: decision.state,
-      denialReason: decision.denialReason,
-    };
+  const clone: PermissionPromptDecision = {
+    approved: decision.approved,
+    state: decision.state,
+  };
+  if (decision.denialReason !== undefined) {
+    clone.denialReason = decision.denialReason;
+  }
+  if (decision.steerMessage !== undefined) {
+    clone.steerMessage = decision.steerMessage;
+  }
+  return clone;
 }
 
 function createDuplicatePermissionPromptDecision(decision: PermissionPromptDecision): PermissionPromptDecision {
@@ -966,6 +968,7 @@ async function readForwardedPermissionResponse(filePath: string): Promise<Forwar
       approved: parsed.approved,
       state: parsed.state,
       denialReason: typeof parsed.denialReason === "string" ? parsed.denialReason : undefined,
+      steerMessage: typeof parsed.steerMessage === "string" ? parsed.steerMessage : undefined,
       responderSessionId: parsed.responderSessionId,
       respondedAt: typeof parsed.respondedAt === "number" ? parsed.respondedAt : Date.now(),
     };
@@ -1060,6 +1063,7 @@ async function waitForForwardedPermissionApproval(
         approved: boundResponse?.approved ?? null,
         state: boundResponse?.state ?? null,
         denialReasonMetadata: createSensitiveLogMetadata(boundResponse?.denialReason),
+        steerMessageMetadata: createSensitiveLogMetadata(boundResponse?.steerMessage),
         responderSessionId: boundResponse?.responderSessionId ?? null,
         targetSessionId,
         responsePath,
@@ -1230,6 +1234,7 @@ export async function processForwardedPermissionRequests(
       responsePath,
       resolution: decision.state,
       denialReasonMetadata: createSensitiveLogMetadata(decision.denialReason),
+      steerMessageMetadata: createSensitiveLogMetadata(decision.steerMessage),
     });
     try {
       writeJsonFileAtomic(responsePath, {
@@ -1238,6 +1243,7 @@ export async function processForwardedPermissionRequests(
         approved: decision.approved,
         state: decision.state,
         denialReason: decision.denialReason,
+        steerMessage: decision.steerMessage,
         responderSessionId: currentSessionId,
         respondedAt: Date.now(),
       } satisfies ForwardedPermissionResponse);
@@ -1613,6 +1619,12 @@ export default function piPermissionSystemExtension(pi: ExtensionAPI): void {
       emitPermissionStateEvent(details, "waiting");
 
       const decision = await confirmPermission(ctx, details.message);
+      if (decision.state === "steer" && decision.steerMessage === undefined) {
+        // Pause instead of steering: end the run so the user can reply with a normal
+        // message. The returned decision still blocks the call with soft wording in
+        // case the abort signal is not observed before this handler resolves.
+        ctx.abort();
+      }
       reviewPermissionDecision(decision.approved ? "permission_request.approved" : "permission_request.denied", {
         ...details,
         resolution: decision.state,
@@ -1635,7 +1647,13 @@ export default function piPermissionSystemExtension(pi: ExtensionAPI): void {
     }
 
     try {
-      return clonePermissionPromptDecision(await decisionPromise);
+      const decision = clonePermissionPromptDecision(await decisionPromise);
+      if (cacheKey && decision.state === "steer") {
+        // A steered call is expected to be retried with the same prompt; drop the
+        // cached decision so the retry prompts fresh instead of auto-reusing the note.
+        forgetPermissionPromptDecision(recentPermissionPromptDecisions, cacheKey, decisionPromise);
+      }
+      return decision;
     } catch (error) {
       if (cacheKey) {
         forgetPermissionPromptDecision(recentPermissionPromptDecisions, cacheKey, decisionPromise);
@@ -2033,6 +2051,15 @@ export default function piPermissionSystemExtension(pi: ExtensionAPI): void {
               path: readPath,
               toolInput: event.input,
             });
+            if (decision.state === "steer") {
+              return {
+                block: true,
+                reason: formatUserSteerReason(
+                  { toolName, source: "skill", state: "ask" },
+                  decision.steerMessage,
+                ),
+              };
+            }
             if (!decision.approved) {
               const denialReason = decision.denialReason ? ` Reason: ${decision.denialReason}.` : "";
               return { block: true, reason: `User denied access to this skill.${denialReason}` };
@@ -2117,6 +2144,16 @@ export default function piPermissionSystemExtension(pi: ExtensionAPI): void {
           path: externalDirectoryPath,
           toolInput: input,
         });
+
+        if (extDecision.state === "steer") {
+          return {
+            block: true,
+            reason: formatUserSteerReason(
+              { ...extCheck, toolName },
+              extDecision.steerMessage,
+            ),
+          };
+        }
 
         if (!extDecision.approved) {
           return {
@@ -2212,6 +2249,9 @@ export default function piPermissionSystemExtension(pi: ExtensionAPI): void {
         toolName,
         ...permissionLogContext,
       });
+      if (decision.state === "steer") {
+        return { block: true, reason: formatUserSteerReason(check, decision.steerMessage) };
+      }
       if (!decision.approved) {
         return { block: true, reason: formatUserDeniedReason(check, decision.denialReason) };
       }

@@ -8,7 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- Added `escapeAction` extension setting controlling what `esc` does at a permission prompt: `reject` (default, deny immediately with no reason) or `reject_with_reason` (prompt for an optional denial reason before rejecting).
+- Added `escapeAction` extension setting controlling what `esc` does at a permission prompt: `reject` (default, deny immediately with no reason), `reject_with_reason` (prompt for an optional denial reason before rejecting), or `stop_and_steer` (prompt for guidance shown to the agent without rejecting the call; an empty note pauses the run so the user can reply directly).
+- Added a `Stop and steer` option to the permission dialog: it blocks the tool call with soft steering wording instead of the hard-stop denial, passing the user's guidance to the agent. An empty steering note pauses the run (same as `esc` mid-turn) so the user can reply with a normal message.
+- Permission dialog option labels now use sentence case: `Allow once`, `Allow always`, `Reject`, `Reject with reason`, and the new `Stop and steer`.
 
 ### Changed
 - **Breaking:** extension settings (`enabled`, `debug`, `yoloMode`, `forwardedPromptTimeoutSeconds`, `escapeAction`) now live as top-level keys of the global policy file (`pi-permissions.jsonc`) instead of a separate `config.json`. All keys are documented in the JSON schema; delete your old `config.json` after moving any non-default values.

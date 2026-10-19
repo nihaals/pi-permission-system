@@ -14,7 +14,7 @@
 //     - "once"/"always"/"reject" reply semantics
 //     - Merged evaluation (config + session)
 //   Note: Permanent (cross-session) approval persistence was removed;
-//     "Allow Always" now records session-only approvals.
+//     "Allow always" now records session-only approvals.
 //
 // SOURCE BEHAVIOR:
 //   OpenCode permission system (commit a78605f8e) provides the reference
@@ -351,7 +351,7 @@ await runAsyncTest("ISSUE23-E5: permission dialog labels use OpenCode-style opti
     {
       select: async (_title, options) => {
         displayedOptions = options;
-        return "Allow Once";
+        return "Allow once";
       },
       input: async () => undefined,
     },
@@ -360,13 +360,14 @@ await runAsyncTest("ISSUE23-E5: permission dialog labels use OpenCode-style opti
   );
 
   assert.deepEqual(displayedOptions, [
-    "Allow Once",
-    "Allow Always",
+    "Allow once",
+    "Allow always",
     "Reject",
-    "Reject with Reason",
+    "Reject with reason",
+    "Stop and steer",
   ]);
-  assert.equal(decision.approved, true, "Allow Once should approve the current request");
-  assert.equal(decision.state, "once", "Allow Once should preserve OpenCode's once protocol state");
+  assert.equal(decision.approved, true, "Allow once should approve the current request");
+  assert.equal(decision.state, "once", "Allow once should preserve OpenCode's once protocol state");
 });
 
 await runAsyncTest("Permission dialog passes timeout options and returns configured timeout denial reason", async () => {
@@ -393,19 +394,19 @@ await runAsyncTest("Permission dialog passes timeout options and returns configu
   assert.equal(decision.denialReason, "permission_timeout: no response.");
 });
 
-// E6: Dialog label maps Allow Always to the always protocol state
-await runAsyncTest("ISSUE23-E6: permission dialog maps Allow Always to always state", async () => {
+// E6: Dialog label maps Allow always to the always protocol state
+await runAsyncTest("ISSUE23-E6: permission dialog maps Allow always to always state", async () => {
   const decision = await requestPermissionDecisionFromUi(
     {
-      select: async () => "Allow Always",
+      select: async () => "Allow always",
       input: async () => undefined,
     },
     "Permission Required",
     "Agent requested bash command 'git status'. Allow this command?",
   );
 
-  assert.equal(decision.approved, true, "Allow Always should approve matching future requests");
-  assert.equal(decision.state, "always", "Allow Always should preserve OpenCode's always protocol state");
+  assert.equal(decision.approved, true, "Allow always should approve matching future requests");
+  assert.equal(decision.state, "always", "Allow always should preserve OpenCode's always protocol state");
 });
 
 // E7: Dialog label maps Reject to the reject protocol state
@@ -424,12 +425,12 @@ await runAsyncTest("ISSUE23-E7: permission dialog maps Reject to reject state", 
   assert.equal(decision.denialReason, undefined, "Reject should not attach a reason when the reason path was not selected");
 });
 
-// E8: Dialog label maps Reject with Reason to reject state and captures trimmed feedback
-await runAsyncTest("ISSUE23-E8: permission dialog captures Reject with Reason feedback", async () => {
+// E8: Dialog label maps Reject with reason to reject state and captures trimmed feedback
+await runAsyncTest("ISSUE23-E8: permission dialog captures Reject with reason feedback", async () => {
   let inputPrompted = false;
   const decision = await requestPermissionDecisionFromUi(
     {
-      select: async () => "Reject with Reason",
+      select: async () => "Reject with reason",
       input: async () => {
         inputPrompted = true;
         return "  Use read-only inspection instead  ";
@@ -439,9 +440,9 @@ await runAsyncTest("ISSUE23-E8: permission dialog captures Reject with Reason fe
     "Agent requested bash command 'git status'. Allow this command?",
   );
 
-  assert.equal(inputPrompted, true, "Reject with Reason should prompt for feedback");
-  assert.equal(decision.approved, false, "Reject with Reason should deny the request");
-  assert.equal(decision.state, "reject", "Reject with Reason should preserve OpenCode's reject protocol state");
+  assert.equal(inputPrompted, true, "Reject with reason should prompt for feedback");
+  assert.equal(decision.approved, false, "Reject with reason should deny the request");
+  assert.equal(decision.state, "reject", "Reject with reason should preserve OpenCode's reject protocol state");
   assert.equal(decision.denialReason, "Use read-only inspection instead", "Feedback should be trimmed before returning to the agent");
 });
 

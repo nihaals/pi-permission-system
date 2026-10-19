@@ -42,7 +42,7 @@ export function createMockContext(
       },
       select: async (title: string): Promise<string | undefined> => {
         prompts.push(title);
-        return options.selectResponse ?? "Allow Once";
+        return options.selectResponse ?? "Allow once";
       },
       input: async (): Promise<string | undefined> => options.inputResponse,
     },

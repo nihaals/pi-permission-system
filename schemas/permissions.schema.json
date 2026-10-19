@@ -30,9 +30,9 @@
       "default": 30
     },
     "escapeAction": {
-      "description": "Behavior when `esc` is pressed at a permission prompt. `reject` denies immediately with no reason; `reject_with_reason` prompts for an optional denial reason before rejecting.",
+      "description": "Behavior when `esc` is pressed at a permission prompt. `reject` denies immediately with no reason; `reject_with_reason` prompts for an optional denial reason before rejecting; `steer` prompts for guidance that is shown to the agent without rejecting the call (an empty note pauses the run so the user can reply directly).",
       "type": "string",
-      "enum": ["reject", "reject_with_reason"],
+      "enum": ["reject", "reject_with_reason", "stop_and_steer"],
       "default": "reject"
     },
     "defaultPolicy": {

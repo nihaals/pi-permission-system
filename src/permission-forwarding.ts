@@ -34,6 +34,7 @@ export type ForwardedPermissionResponse = {
   approved: boolean;
   state: PermissionDecisionState;
   denialReason?: string;
+  steerMessage?: string;
   responderSessionId: string;
   respondedAt: number;
 };

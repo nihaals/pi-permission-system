@@ -88,6 +88,18 @@ export function formatUserDeniedReason(result: PermissionCheckResult, denialReas
   return `${base}${reasonSuffix} ${formatPermissionHardStopHint(result)}`;
 }
 
+export function formatUserSteerReason(result: PermissionCheckResult, steerMessage?: string): string {
+  const base = (result.source === "mcp" || result.toolName === "mcp") && result.target
+    ? `User paused MCP target '${result.target}' before it ran — this is not a rejection.`
+    : result.toolName === "bash" && result.command
+      ? `User paused bash command '${result.command}' before it ran — this is not a rejection.`
+      : `User paused tool '${result.toolName}' before it ran — this is not a rejection.`;
+
+  return steerMessage
+    ? `${base} Steering note: ${steerMessage}`
+    : `${base} The user will follow up with their own message.`;
+}
+
 function truncateInlineText(value: string, maxLength: number): string {
   return value.length > maxLength ? `${value.slice(0, maxLength)}…` : value;
 }

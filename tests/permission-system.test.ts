@@ -261,7 +261,7 @@ function createMockContext(
       },
       select: async (title: string): Promise<string | undefined> => {
         prompts.push(title);
-        return options.selectResponse ?? "Allow Once";
+        return options.selectResponse ?? "Allow once";
       },
       input: async (): Promise<string | undefined> => options.inputResponse,
     },
@@ -911,7 +911,7 @@ runTest("BashFilter uses opencode-style last-match hierarchy", () => {
   assert.equal(generic.matchedPattern, "git *");
 });
 
-await runAsyncTest("OpenCode-style Allow Once approves only the current request", async () => {
+await runAsyncTest("OpenCode-style Allow once approves only the current request", async () => {
   const harness = createToolCallHarness(
     {
       defaultPolicy: { tools: "allow", bash: "ask", mcp: "ask", skills: "ask", special: "ask" },
@@ -927,7 +927,7 @@ await runAsyncTest("OpenCode-style Allow Once approves only the current request"
         toolCallId: "allow-once-first",
         input: { command: "git status --short" },
       },
-      { hasUI: true, selectResponse: "Allow Once" },
+      { hasUI: true, selectResponse: "Allow once" },
     );
     assert.deepEqual(first, {});
 
@@ -943,7 +943,7 @@ await runAsyncTest("OpenCode-style Allow Once approves only the current request"
   }
 });
 
-await runAsyncTest("OpenCode-style Allow Always approves matching requests for this session", async () => {
+await runAsyncTest("OpenCode-style Allow always approves matching requests for this session", async () => {
   const harness = createToolCallHarness(
     {
       defaultPolicy: { tools: "allow", bash: "ask", mcp: "ask", skills: "ask", special: "ask" },
@@ -959,7 +959,7 @@ await runAsyncTest("OpenCode-style Allow Always approves matching requests for t
         toolCallId: "allow-always-first",
         input: { command: "git status --short" },
       },
-      { hasUI: true, selectResponse: "Allow Always" },
+      { hasUI: true, selectResponse: "Allow always" },
     );
     assert.deepEqual(first, {});
 
@@ -974,7 +974,7 @@ await runAsyncTest("OpenCode-style Allow Always approves matching requests for t
   }
 });
 
-await runAsyncTest("OpenCode-style Reject with Reason prompts for feedback and returns it to the agent", async () => {
+await runAsyncTest("OpenCode-style Reject with reason prompts for feedback and returns it to the agent", async () => {
   const harness = createToolCallHarness(
     {
       defaultPolicy: { tools: "allow", bash: "ask", mcp: "ask", skills: "ask", special: "ask" },
@@ -990,7 +990,7 @@ await runAsyncTest("OpenCode-style Reject with Reason prompts for feedback and r
         toolCallId: "reject-with-reason",
         input: { command: "git status --short" },
       },
-      { hasUI: true, selectResponse: "Reject with Reason", inputResponse: "Use read-only inspection instead" },
+      { hasUI: true, selectResponse: "Reject with reason", inputResponse: "Use read-only inspection instead" },
     );
 
     assert.equal(result.block, true);
@@ -3076,7 +3076,7 @@ await runAsyncTest("tool_call prompts for external_directory and then falls thro
         toolCallId: "external-ask-approved",
         input: { pattern: "needle", path: externalPath },
       },
-      { hasUI: true, selectResponse: "Allow Once" },
+      { hasUI: true, selectResponse: "Allow once" },
     );
 
     assert.deepEqual(result, {});
@@ -3559,7 +3559,7 @@ await runAsyncTest("Forwarded permission prompt reflects configured timeout", as
 
     setExtensionConfig({ debug: false, yoloMode: false, forwardedPromptTimeoutSeconds: 45 });
     await processForwardedPermissionRequests(
-      createMockContext(baseDir, prompts45, { hasUI: true, selectResponse: "Allow Once" }) as never,
+      createMockContext(baseDir, prompts45, { hasUI: true, selectResponse: "Allow once" }) as never,
       { preserveLocation: true },
     );
 
@@ -3585,7 +3585,7 @@ await runAsyncTest("Forwarded permission prompt reflects configured timeout", as
 
     setExtensionConfig({ debug: false, yoloMode: false, forwardedPromptTimeoutSeconds: null });
     await processForwardedPermissionRequests(
-      createMockContext(baseDir, promptsUnlimited, { hasUI: true, selectResponse: "Allow Once" }) as never,
+      createMockContext(baseDir, promptsUnlimited, { hasUI: true, selectResponse: "Allow once" }) as never,
       { preserveLocation: true },
     );
 
