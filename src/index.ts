@@ -391,6 +391,9 @@ function clonePermissionPromptDecision(decision: PermissionPromptDecision): Perm
   if (decision.steerMessage !== undefined) {
     clone.steerMessage = decision.steerMessage;
   }
+  if (decision.approvalNote !== undefined) {
+    clone.approvalNote = decision.approvalNote;
+  }
   return clone;
 }
 
@@ -969,6 +972,7 @@ async function readForwardedPermissionResponse(filePath: string): Promise<Forwar
       state: parsed.state,
       denialReason: typeof parsed.denialReason === "string" ? parsed.denialReason : undefined,
       steerMessage: typeof parsed.steerMessage === "string" ? parsed.steerMessage : undefined,
+      approvalNote: typeof parsed.approvalNote === "string" ? parsed.approvalNote : undefined,
       responderSessionId: parsed.responderSessionId,
       respondedAt: typeof parsed.respondedAt === "number" ? parsed.respondedAt : Date.now(),
     };
@@ -1244,6 +1248,7 @@ export async function processForwardedPermissionRequests(
         state: decision.state,
         denialReason: decision.denialReason,
         steerMessage: decision.steerMessage,
+        approvalNote: decision.approvalNote,
         responderSessionId: currentSessionId,
         respondedAt: Date.now(),
       } satisfies ForwardedPermissionResponse);
@@ -1621,9 +1626,13 @@ export default function piPermissionSystemExtension(pi: ExtensionAPI): void {
       const decision = await confirmPermission(ctx, details.message);
       if (decision.state === "steer" && decision.steerMessage === undefined) {
         // Pause instead of steering: end the run so the user can reply with a normal
-        // message. The returned decision still blocks the call with soft wording in
-        // case the abort signal is not observed before this handler resolves.
+        // message. Pi records the native "Operation aborted" tool result for the call.
         ctx.abort();
+      }
+      if (decision.approved && decision.approvalNote !== undefined) {
+        // Approve-with-note: the call runs now; deliver the note as a user message
+        // once the tool batch completes, before the agent's next response.
+        pi.sendUserMessage(decision.approvalNote, { deliverAs: "steer" });
       }
       reviewPermissionDecision(decision.approved ? "permission_request.approved" : "permission_request.denied", {
         ...details,

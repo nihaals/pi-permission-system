@@ -7,6 +7,7 @@ export type PermissionPromptDecision = {
   state: PermissionDecisionState;
   denialReason?: string;
   steerMessage?: string;
+  approvalNote?: string;
 };
 
 export interface PermissionDecisionUiSelectOptions {
@@ -38,12 +39,14 @@ export function normalizePermissionEscapeAction(value: unknown): PermissionEscap
 
 const APPROVE_ONCE_OPTION = "Allow once";
 const APPROVE_ALWAYS_OPTION = "Allow always";
+const APPROVE_WITH_NOTE_OPTION = "Allow with note";
 const REJECT_OPTION = "Reject";
 const REJECT_WITH_REASON_OPTION = "Reject with reason";
 const STEER_OPTION = "Stop and steer";
 const PERMISSION_DECISION_OPTIONS = [
   APPROVE_ONCE_OPTION,
   APPROVE_ALWAYS_OPTION,
+  APPROVE_WITH_NOTE_OPTION,
   REJECT_OPTION,
   REJECT_WITH_REASON_OPTION,
   STEER_OPTION,
@@ -143,6 +146,19 @@ async function promptForSteering(ui: PermissionDecisionUi, title: string): Promi
   return createSteerPermissionDecision(steerMessage);
 }
 
+async function promptForApprovalNote(ui: PermissionDecisionUi, title: string): Promise<PermissionPromptDecision> {
+  const note = normalizePermissionDenialReason(
+    await ui.input(
+      `${title}\nThe call will run now; your note is delivered to the agent right after the result.\nShare a note (leave empty to just allow once).`,
+      "Note shown to the agent after the result",
+    ),
+  );
+
+  return note
+    ? { approved: true, state: "once", approvalNote: note }
+    : { approved: true, state: "once" };
+}
+
 async function promptForRejection(ui: PermissionDecisionUi, title: string): Promise<PermissionPromptDecision> {
   const denialReason = normalizePermissionDenialReason(
     await ui.input(
@@ -183,6 +199,10 @@ export async function requestPermissionDecisionFromUi(
       approved: true,
       state: "always",
     };
+  }
+
+  if (selected === APPROVE_WITH_NOTE_OPTION) {
+    return promptForApprovalNote(ui, title);
   }
 
   if (selected === REJECT_WITH_REASON_OPTION) {

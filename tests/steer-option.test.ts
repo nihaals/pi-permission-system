@@ -25,6 +25,7 @@ type SteerToolCallHarness = {
   cwd: string;
   prompts: string[];
   handlers: Record<string, MockHandler>;
+  sentUserMessages: Array<{ text: string; options?: { deliverAs?: string } }>;
   cleanup: () => Promise<void>;
 };
 
@@ -122,6 +123,8 @@ function createSteerToolCallHarness(): SteerToolCallHarness {
     delete process.env[key];
   }
 
+  const sentUserMessages: Array<{ text: string; options?: { deliverAs?: string } }> = [];
+
   piPermissionSystemExtension({
     on: (name: string, handler: MockHandler): void => {
       handlers[name] = handler;
@@ -130,6 +133,9 @@ function createSteerToolCallHarness(): SteerToolCallHarness {
     getAllTools: (): Array<{ name: string }> => [{ name: "read" }],
     setActiveTools: (): void => {},
     registerProvider: (): void => {},
+    sendUserMessage: (text: string, options?: { deliverAs?: string }): void => {
+      sentUserMessages.push({ text, options });
+    },
     events: {
       emit: (): void => {},
     },
@@ -140,6 +146,7 @@ function createSteerToolCallHarness(): SteerToolCallHarness {
     cwd,
     prompts,
     handlers,
+    sentUserMessages,
     cleanup: async (): Promise<void> => {
       await Promise.resolve(handlers.session_shutdown?.({}, createSteerMockContext(cwd, prompts)));
       for (const [key, value] of originalValues.entries()) {
@@ -217,6 +224,7 @@ await runAsyncTest("dialog: select options include the Stop and steer button", a
   );
   assert.equal(selectOptions.length, 1);
   assert.ok(selectOptions[0]?.includes("Stop and steer"), `expected Stop and steer in options, got ${JSON.stringify(selectOptions[0])}`);
+  assert.ok(selectOptions[0]?.includes("Allow with note"), `expected Allow with note in options, got ${JSON.stringify(selectOptions[0])}`);
 });
 
 await runAsyncTest("escape action helpers accept steer and normalize invalid values to reject", async () => {
@@ -307,6 +315,63 @@ await runAsyncTest("extension: a steered decision is not cached for identical re
     assert.equal(first.block, true);
     assert.equal(second.block, undefined, "retried identical call must re-prompt and allow instead of reusing the steer");
     assert.equal(harness.prompts.length, 2, "steer decisions must not be reused from the duplicate-prompt cache");
+  } finally {
+    await harness.cleanup();
+  }
+});
+
+await runAsyncTest("dialog: Allow with note approves once and carries the note", async () => {
+  const decision = await decide(
+    createSteerUi({ selectResponse: "Allow with note", inputResponse: "also check the tests dir" }),
+  );
+  assert.equal(decision.approved, true);
+  assert.equal(decision.state, "once");
+  assert.equal(decision.approvalNote, "also check the tests dir");
+  assert.equal(decision.denialReason, undefined);
+});
+
+await runAsyncTest("dialog: Allow with note with an empty note degrades to a plain Allow once", async () => {
+  const decision = await decide(
+    createSteerUi({ selectResponse: "Allow with note", inputResponse: "" }),
+  );
+  assert.equal(decision.approved, true);
+  assert.equal(decision.state, "once");
+  assert.equal(decision.approvalNote, undefined);
+});
+
+await runAsyncTest("extension: Allow with note runs the call and queues the note as a steering message", async () => {
+  const harness = createSteerToolCallHarness();
+  try {
+    await Promise.resolve(harness.handlers.session_start?.({ reason: "test" }, createSteerMockContext(harness.cwd, harness.prompts)));
+
+    const result = await runToolCall(
+      harness,
+      { toolName: "read", toolCallId: "note-e2e-1", input: { path: "src/a.ts" } },
+      { selectResponse: "Allow with note", inputResponse: "also check the tests dir" },
+    );
+
+    assert.deepEqual(result, {}, "approved call must not be blocked");
+    assert.equal(harness.sentUserMessages.length, 1);
+    assert.equal(harness.sentUserMessages[0]?.text, "also check the tests dir");
+    assert.equal(harness.sentUserMessages[0]?.options?.deliverAs, "steer");
+  } finally {
+    await harness.cleanup();
+  }
+});
+
+await runAsyncTest("extension: Allow with note with an empty note queues nothing", async () => {
+  const harness = createSteerToolCallHarness();
+  try {
+    await Promise.resolve(harness.handlers.session_start?.({ reason: "test" }, createSteerMockContext(harness.cwd, harness.prompts)));
+
+    const result = await runToolCall(
+      harness,
+      { toolName: "read", toolCallId: "note-e2e-2", input: { path: "src/a.ts" } },
+      { selectResponse: "Allow with note", inputResponse: "" },
+    );
+
+    assert.deepEqual(result, {});
+    assert.equal(harness.sentUserMessages.length, 0);
   } finally {
     await harness.cleanup();
   }

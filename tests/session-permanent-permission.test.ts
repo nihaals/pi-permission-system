@@ -362,6 +362,7 @@ await runAsyncTest("ISSUE23-E5: permission dialog labels use OpenCode-style opti
   assert.deepEqual(displayedOptions, [
     "Allow once",
     "Allow always",
+    "Allow with note",
     "Reject",
     "Reject with reason",
     "Stop and steer",

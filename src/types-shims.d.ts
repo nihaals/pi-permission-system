@@ -172,6 +172,7 @@ declare module "@earendil-works/pi-coding-agent" {
     on(event: string, handler: (...args: any[]) => any): void;
     getAllTools(): unknown[];
     setActiveTools(toolNames: string[]): void;
+    sendUserMessage(content: string, options?: { deliverAs?: "steer" | "followUp" }): void;
     registerProvider?(...args: any[]): void;
     registerCommand(
       name: string,
