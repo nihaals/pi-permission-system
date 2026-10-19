@@ -200,6 +200,30 @@ declare module "@earendil-works/pi-coding-agent" {
     reason?: string;
   }
 
+  export interface EditOperations {
+    readFile(absolutePath: string): Promise<Buffer>;
+    writeFile(absolutePath: string, content: string): Promise<void>;
+    access(absolutePath: string): Promise<void>;
+  }
+
+  export interface EditToolDefinition {
+    name: string;
+    label?: string;
+    prepareArguments?(input: unknown): unknown;
+    execute(
+      toolCallId: string,
+      input: unknown,
+      signal: AbortSignal | undefined,
+      onUpdate: (partial: unknown) => void,
+      ctx: { cwd?: string } | undefined,
+    ): Promise<unknown>;
+  }
+
+  export function createEditToolDefinition(
+    cwd: string,
+    options?: { operations?: EditOperations },
+  ): EditToolDefinition;
+
   export function getAgentDir(): string;
   export function getSettingsListTheme(...args: any[]): any;
   export function isToolCallEventType(toolName: string, event: unknown): boolean;

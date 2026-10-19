@@ -1,4 +1,5 @@
 import { getAgentDir, isToolCallEventType, type ExtensionAPI, type ExtensionCommandContext, type ExtensionContext, type BeforeAgentStartEvent, type InputEvent, type ResourcesDiscoverEvent, type SessionStartEvent, type ToolCallEvent } from "@earendil-works/pi-coding-agent";
+import { EDIT_TOOL_NAME, isEditCallProvablyInvalid } from "./edit-precheck.js";
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 import { chmodSync, existsSync, mkdirSync, readdirSync, renameSync, rmdirSync, unlinkSync, watch, writeFileSync, type FSWatcher } from "node:fs";
 import { readFile } from "node:fs/promises";
@@ -2122,6 +2123,19 @@ export default function piPermissionSystemExtension(pi: ExtensionAPI): void {
       }
 
       if (extCheck.state === "ask") {
+        if (toolName === EDIT_TOOL_NAME && await isEditCallProvablyInvalid(input, ctx.cwd)) {
+          writeReviewEntry("permission_request.edit_precheck", {
+            source: "tool_call",
+            toolCallId: event.toolCallId,
+            toolName,
+            agentName,
+            path: externalDirectoryPath,
+            toolInput: input,
+            resolution: "invalid_edit_prompt_skipped",
+          });
+          await extensionLogger.flush();
+          return {};
+        }
         const message = formatExternalDirectoryAskPrompt(
           toolName,
           externalDirectoryPath,
@@ -2228,6 +2242,19 @@ export default function piPermissionSystemExtension(pi: ExtensionAPI): void {
     }
 
     if (check.state === "ask") {
+      if (toolName === EDIT_TOOL_NAME && await isEditCallProvablyInvalid(input, ctx.cwd)) {
+        writeReviewEntry("permission_request.edit_precheck", {
+          source: "tool_call",
+          toolCallId: event.toolCallId,
+          toolName,
+          agentName,
+          ...permissionLogContext,
+          toolInput: input,
+          resolution: "invalid_edit_prompt_skipped",
+        });
+        await extensionLogger.flush();
+        return {};
+      }
       const unavailableReason = toolName === "bash" && isToolCallEventType("bash", event)
         ? `Running bash command '${event.input.command}' requires approval, but no interactive UI is available.`
         : toolName === "mcp"
