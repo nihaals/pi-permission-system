@@ -20,7 +20,20 @@ export interface PermissionDecisionUi {
 export type PermissionDecisionRequestOptions = {
   timeoutMs?: number;
   timeoutDenialReason?: string;
+  escapeAction?: PermissionEscapeAction;
 };
+
+export const PERMISSION_ESCAPE_ACTIONS = ["reject", "reject_with_reason"] as const;
+
+export type PermissionEscapeAction = (typeof PERMISSION_ESCAPE_ACTIONS)[number];
+
+export function isPermissionEscapeAction(value: unknown): value is PermissionEscapeAction {
+  return value === "reject" || value === "reject_with_reason";
+}
+
+export function normalizePermissionEscapeAction(value: unknown): PermissionEscapeAction {
+  return value === "reject_with_reason" ? "reject_with_reason" : "reject";
+}
 
 const APPROVE_ONCE_OPTION = "Allow Once";
 const APPROVE_ALWAYS_OPTION = "Allow Always";
@@ -108,6 +121,19 @@ export function isPermissionDecisionState(
     || value === "reject";
 }
 
+async function promptForRejection(ui: PermissionDecisionUi, title: string): Promise<PermissionPromptDecision> {
+  const denialReason = normalizePermissionDenialReason(
+    await ui.input(
+      `${title}\nShare why this request was denied (optional).`,
+      "Reason shown back to the agent",
+    ),
+  );
+
+  return denialReason
+    ? { approved: false, state: "reject", denialReason }
+    : { approved: false, state: "reject" };
+}
+
 export async function requestPermissionDecisionFromUi(
   ui: PermissionDecisionUi,
   title: string,
@@ -138,16 +164,11 @@ export async function requestPermissionDecisionFromUi(
   }
 
   if (selected === REJECT_WITH_REASON_OPTION) {
-    const denialReason = normalizePermissionDenialReason(
-      await ui.input(
-        `${title}\nShare why this request was denied (optional).`,
-        "Reason shown back to the agent",
-      ),
-    );
+    return promptForRejection(ui, title);
+  }
 
-    return denialReason
-      ? { approved: false, state: "reject", denialReason }
-      : { approved: false, state: "reject" };
+  if (selected === undefined && options.escapeAction === "reject_with_reason") {
+    return promptForRejection(ui, title);
   }
 
   return options.timeoutDenialReason

@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 
 import { toRecord } from "./common.js";
 import { formatJsoncConfigLoadWarning, isNodeErrorWithCode, parseJsoncConfig } from "./jsonc-config.js";
+import { normalizePermissionEscapeAction, type PermissionEscapeAction } from "./permission-dialog.js";
 
 export const EXTENSION_ID = "pi-permission-system";
 
@@ -13,6 +14,8 @@ export interface PermissionSystemExtensionConfig {
   debug: boolean;
   yoloMode: boolean;
   forwardedPromptTimeoutSeconds: number | null;
+  /** Behavior when `esc` is pressed at a permission prompt. Defaults to `reject`. */
+  escapeAction?: PermissionEscapeAction;
 }
 
 export interface PermissionSystemConfigLoadResult {
@@ -31,6 +34,7 @@ export const DEFAULT_EXTENSION_CONFIG: PermissionSystemExtensionConfig = {
   debug: false,
   yoloMode: false,
   forwardedPromptTimeoutSeconds: 30,
+  escapeAction: "reject",
 };
 
 export function resolveExtensionRoot(moduleUrl = import.meta.url): string {
@@ -66,6 +70,7 @@ export function cloneDefaultConfig(): PermissionSystemExtensionConfig {
     debug: DEFAULT_EXTENSION_CONFIG.debug,
     yoloMode: DEFAULT_EXTENSION_CONFIG.yoloMode,
     forwardedPromptTimeoutSeconds: DEFAULT_EXTENSION_CONFIG.forwardedPromptTimeoutSeconds,
+    escapeAction: DEFAULT_EXTENSION_CONFIG.escapeAction,
   };
 }
 
@@ -89,6 +94,7 @@ export function normalizePermissionSystemConfig(raw: unknown): PermissionSystemE
     debug: record.debug === true,
     yoloMode: record.yoloMode === true,
     forwardedPromptTimeoutSeconds,
+    escapeAction: normalizePermissionEscapeAction(record.escapeAction),
   };
 }
 
@@ -145,6 +151,7 @@ const EXTENSION_CONFIG_KEYS: readonly (keyof PermissionSystemExtensionConfig)[] 
   "debug",
   "yoloMode",
   "forwardedPromptTimeoutSeconds",
+  "escapeAction",
 ];
 
 /**
@@ -200,6 +207,7 @@ function mergeExtensionFields(
     debug: normalized.debug,
     yoloMode: normalized.yoloMode,
     forwardedPromptTimeoutSeconds: normalized.forwardedPromptTimeoutSeconds,
+    escapeAction: normalized.escapeAction ?? DEFAULT_EXTENSION_CONFIG.escapeAction,
   };
 
   for (const key of EXTENSION_CONFIG_KEYS) {

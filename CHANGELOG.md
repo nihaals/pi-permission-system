@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Added `escapeAction` extension config setting (also toggleable in the `/permission-system` settings modal) controlling what `esc` does at a permission prompt: `reject` (default, deny immediately with no reason) or `reject_with_reason` (prompt for an optional denial reason before rejecting).
+
 ## [0.8.0] - 2026-07-03
 
 ### Changed

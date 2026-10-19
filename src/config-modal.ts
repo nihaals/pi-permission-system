@@ -3,6 +3,7 @@ import type { SettingItem } from "@earendil-works/pi-tui";
 
 import { createPermissionSystemCommandHandler, PERMISSION_SYSTEM_COMMAND_DESCRIPTION } from "./common.js";
 import type { PermissionSystemExtensionConfig } from "./extension-config.js";
+import { PERMISSION_ESCAPE_ACTIONS, normalizePermissionEscapeAction, type PermissionEscapeAction } from "./permission-dialog.js";
 import { ZellijModal, ZellijSettingsModal } from "./zellij-modal.js";
 
 interface PermissionSystemConfigController {
@@ -16,6 +17,7 @@ interface SettingValueSyncTarget {
 }
 
 const ON_OFF = ["on", "off"];
+const DEFAULT_ESCAPE_ACTION: PermissionEscapeAction = "reject";
 
 function toOnOff(value: boolean): string {
   return value ? "on" : "off";
@@ -37,6 +39,13 @@ function buildSettingItems(config: PermissionSystemExtensionConfig): SettingItem
       currentValue: toOnOff(config.yoloMode),
       values: ON_OFF,
     },
+    {
+      id: "escapeAction",
+      label: "Prompt escape action",
+      description: "Behavior when Esc is pressed at a permission prompt: reject immediately (reject) or ask for a rejection reason (reject_with_reason)",
+      currentValue: config.escapeAction ?? DEFAULT_ESCAPE_ACTION,
+      values: [...PERMISSION_ESCAPE_ACTIONS],
+    },
   ];
 }
 
@@ -50,6 +59,8 @@ function applySetting(
       return { ...config, debug: value === "on" };
     case "yoloMode":
       return { ...config, yoloMode: value === "on" };
+    case "escapeAction":
+      return { ...config, escapeAction: normalizePermissionEscapeAction(value) };
     default:
       return config;
   }
@@ -58,6 +69,7 @@ function applySetting(
 function syncSettingValues(settingsList: SettingValueSyncTarget, config: PermissionSystemExtensionConfig): void {
   settingsList.updateValue("debug", toOnOff(config.debug));
   settingsList.updateValue("yoloMode", toOnOff(config.yoloMode));
+  settingsList.updateValue("escapeAction", config.escapeAction ?? DEFAULT_ESCAPE_ACTION);
 }
 
 export async function openPermissionSystemSettingsModal(ctx: ExtensionCommandContext, controller: PermissionSystemConfigController): Promise<void> {

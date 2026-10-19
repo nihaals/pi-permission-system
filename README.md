@@ -203,7 +203,8 @@ The extension creates this file automatically when it is missing. It controls ex
 {
   "enabled": true,
   "debug": false,
-  "yoloMode": false
+  "yoloMode": false,
+  "escapeAction": "reject"
 }
 ```
 
@@ -212,6 +213,7 @@ The extension creates this file automatically when it is missing. It controls ex
 | `enabled` | `true` | Master switch. When `false`, the extension skips all registrations and startup work (permission hooks, commands, runtime API, forwarding). |
 | `debug` | `false` | Enables verbose diagnostics and permission review entries in `logs/pi-permission-system-debug.jsonl` |
 | `yoloMode` | `false` | Auto-approves `ask` results instead of prompting when yolo mode is enabled |
+| `escapeAction` | `reject` | Behavior when `esc` is pressed at a permission prompt. `reject` denies immediately with no reason; `reject_with_reason` opens the rejection-reason input so a denial reason can be attached. |
 
 Debug output writes only under the extension directory by default. Set `PI_PERMISSION_SYSTEM_LOGS_DIR` to redirect the debug file to a specific directory. No debug output is printed to the terminal.
 

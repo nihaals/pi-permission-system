@@ -1216,8 +1216,8 @@ export async function processForwardedPermissionRequests(
             promptMessage,
           ].join("\n"),
           timeoutMs !== undefined
-            ? { timeoutMs, timeoutDenialReason: timeoutDenialReason ?? DEFAULT_FORWARDED_PERMISSION_PROMPT_TIMEOUT_REASON }
-            : {},
+            ? { timeoutMs, timeoutDenialReason: timeoutDenialReason ?? DEFAULT_FORWARDED_PERMISSION_PROMPT_TIMEOUT_REASON, escapeAction: extensionConfig.escapeAction }
+            : { escapeAction: extensionConfig.escapeAction },
         );
       } catch (error) {
         logPermissionForwardingError("Failed to show forwarded permission confirmation dialog", error);
@@ -1259,7 +1259,9 @@ async function confirmPermission(
   message: string,
 ): Promise<PermissionPromptDecision> {
   if (ctx.hasUI) {
-    return requestPermissionDecisionFromUi(ctx.ui, "Permission Required", message);
+    return requestPermissionDecisionFromUi(ctx.ui, "Permission Required", message, {
+      escapeAction: extensionConfig.escapeAction,
+    });
   }
 
   if (!isSubagentExecutionContext(ctx)) {
