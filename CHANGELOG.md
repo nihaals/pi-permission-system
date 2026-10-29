@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Bash permission prompts now omit the command text when a single-call batch asks in the interactive UI (no subagents, no headless/RPC sessions): the full command is already visible in the thread, and omitting it keeps heredoc-style prompts short enough for narrow screens. Multi-call batches, non-UI contexts, forwarded subagent prompts, deny/reason messages, and review logs all still carry the full command.
 - Added `escapeAction` extension setting controlling what `esc` does at a permission prompt: `reject` (default, deny immediately with no reason), `reject_with_reason` (prompt for an optional denial reason before rejecting), or `stop_and_steer` (prompt for guidance shown to the agent without rejecting the call; an empty note pauses the run so the user can reply directly).
 - Added a `Stop and steer` option to the permission dialog: it blocks the tool call with soft steering wording instead of the hard-stop denial, passing the user's guidance to the agent. An empty steering note pauses the run (same as `esc` mid-turn) so the user can reply with a normal message.
 - Added an `Allow with note` option to the permission dialog: it approves the call and delivers an optional note to the agent as a queued user message right after the tool result (an empty note is just `Allow once`). Notes also round-trip through forwarded subagent permission responses.

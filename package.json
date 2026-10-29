@@ -22,7 +22,7 @@
     "build": "npm run typecheck",
     "lint": "npm run typecheck",
     "validate:artifacts": "node ./scripts/validate-artifacts.mjs",
-    "test": "bun ./tests/approved-fixes.test.ts && bun ./tests/config-modal.test.ts && bun ./tests/config-modal-theme-red.test.ts && bun ./tests/config-preservation-red.test.ts && bun ./tests/edge-red-agent-name-traversal.test.ts && bun ./tests/edit-decision-deduplication-red.test.ts && bun ./tests/edit-precheck.test.ts && bun ./tests/edit-prompt-compaction-red.test.ts && bun ./tests/permission-persistence-red.test.ts && bun ./tests/permission-system.test.ts && bun ./tests/steer-option.test.ts && bun ./tests/session-permanent-permission.test.ts && bun ./tests/types-shims-coverage.test.ts && bun ./tests/wildcard-multiline.test.ts && bun ./tests/wildcard-redos.test.ts",
+    "test": "bun ./tests/approved-fixes.test.ts && bun ./tests/bash-ask-prompt-omit.test.ts && bun ./tests/config-modal.test.ts && bun ./tests/config-modal-theme-red.test.ts && bun ./tests/config-preservation-red.test.ts && bun ./tests/edge-red-agent-name-traversal.test.ts && bun ./tests/edit-decision-deduplication-red.test.ts && bun ./tests/edit-precheck.test.ts && bun ./tests/edit-prompt-compaction-red.test.ts && bun ./tests/permission-persistence-red.test.ts && bun ./tests/permission-system.test.ts && bun ./tests/steer-option.test.ts && bun ./tests/session-permanent-permission.test.ts && bun ./tests/types-shims-coverage.test.ts && bun ./tests/wildcard-multiline.test.ts && bun ./tests/wildcard-redos.test.ts",
     "test:issue23": "bun ./tests/session-permanent-permission.test.ts",
     "check": "npm run lint && npm run validate:artifacts && npm run test"
   },

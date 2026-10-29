@@ -278,11 +278,19 @@ export function formatAgentSubject(agentName?: string): string {
   return agentName ? `Agent '${agentName}'` : "Current agent";
 }
 
-export function formatAskPrompt(result: PermissionCheckResult, agentName?: string, input?: unknown): string {
+export function formatAskPrompt(
+  result: PermissionCheckResult,
+  agentName?: string,
+  input?: unknown,
+  options?: { omitBashCommand?: boolean },
+): string {
   const subject = formatAgentSubject(agentName);
 
   if (result.toolName === "bash") {
     const patternInfo = result.matchedPattern ? ` (matched '${result.matchedPattern}')` : "";
+    if (options?.omitBashCommand) {
+      return `${subject} requested a bash command${patternInfo}. Allow this command?`;
+    }
     return `${subject} requested bash command '${result.command || ""}'${patternInfo}. Allow this command?`;
   }
 

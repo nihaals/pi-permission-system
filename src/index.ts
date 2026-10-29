@@ -1336,6 +1336,11 @@ export default function piPermissionSystemExtension(pi: ExtensionAPI): void {
   let runtimeContext: ExtensionContext | null = null;
   let lastConfigWarning: string | null = null;
   const shownWarnings = new Set<string>();
+  // Bounded: replaced wholesale on each assistant message_end (one assistant
+  // response's tool-call ids at most). The agent loop never interleaves batch
+  // N's tool_call events with batch N+1's message_end, so wholesale
+  // replacement cannot lose a lookup.
+  let toolCallBatchCounts = new Map<string, number>();
 
   const invalidateAgentStartCache = (): void => {
     activeSkillEntries = [];
@@ -1898,7 +1903,31 @@ export default function piPermissionSystemExtension(pi: ExtensionAPI): void {
     explicitlyRequestedSkillNames.clear();
     runtimeApi = null;
     invalidateAgentStartCache();
+    toolCallBatchCounts = new Map();
     stopForwardedPermissionPolling();
+  });
+
+  pi.on("message_end", (event: { type: "message_end"; message: unknown }, _ctx: ExtensionContext) => {
+    const message = toRecord(event.message);
+    if (message.role !== "assistant") {
+      return;
+    }
+
+    const contentItems = Array.isArray(message.content) ? message.content : [];
+    const toolCalls = contentItems.filter((item) => toRecord(item).type === "toolCall");
+    if (toolCalls.length === 0) {
+      toolCallBatchCounts = new Map();
+      return;
+    }
+
+    const batchCounts = new Map<string, number>();
+    for (const item of toolCalls) {
+      const toolCallId = getNonEmptyString(toRecord(item).id);
+      if (toolCallId) {
+        batchCounts.set(toolCallId, toolCalls.length);
+      }
+    }
+    toolCallBatchCounts = batchCounts;
   });
 
   pi.on("before_agent_start", async (event: BeforeAgentStartEvent, ctx: ExtensionContext) => {
@@ -2261,7 +2290,10 @@ export default function piPermissionSystemExtension(pi: ExtensionAPI): void {
           ? "Using tool 'mcp' requires approval, but no interactive UI is available."
           : `Using tool '${toolName}' requires approval, but no interactive UI is available.`;
 
-      const message = formatAskPrompt(check, agentName ?? undefined, input);
+      const omitBashCommand = toolName === "bash"
+        && Boolean(ctx.hasUI)
+        && toolCallBatchCounts.get(event.toolCallId) === 1;
+      const message = formatAskPrompt(check, agentName ?? undefined, input, { omitBashCommand });
       if (!canRequestPermissionConfirmation(ctx)) {
         writeReviewEntry("permission_request.blocked", {
           ...buildToolCallBlockedEntryFields(event.toolCallId, toolName, agentName),
